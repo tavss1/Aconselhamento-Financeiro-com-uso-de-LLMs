@@ -1,0 +1,5 @@
+ofxparse==0.21
+pandas==2.2.2
+python-dotenv==1.0.1
+langchain_community==0.3.26
+langchain-ollama==0.3.3
