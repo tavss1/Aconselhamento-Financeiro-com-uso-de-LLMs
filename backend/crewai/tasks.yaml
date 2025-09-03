@@ -1,1 +1,44 @@
-## TODO ##
+# tasks.yaml
+analyze_financial_data:
+  description: "Analisar o extrato bancário e questionário do usuário para extrair insights financeiros"
+  expected_output: "Relatório estruturado com receitas, despesas, categorização de gastos e métricas financeiras"
+  agent: data_analyst
+  
+generate_financial_advice:
+  description: "Gerar conselhos financeiros personalizados usando múltiplos LLMs baseado na análise dos dados"
+  expected_output: "Lista de recomendações financeiras de 3 diferentes LLMs (Llama2, Mistral, GPT4All)"
+  agent: financial_advisor
+  context:
+    - analyze_financial_data
+
+assess_financial_risks:
+  description: "Avaliar riscos das recomendações e validar adequação ao perfil do usuário"
+  expected_output: "Relatório de risco com score de segurança para cada recomendação"
+  agent: risk_assessor
+  context:
+    - generate_financial_advice
+
+evaluate_llm_responses:
+  description: "Comparar as respostas dos diferentes LLMs usando métricas objetivas"
+  expected_output: "Ranking dos modelos com scores de qualidade, relevância e adequação"
+  agent: model_evaluator
+  context:
+    - generate_financial_advice
+    - assess_financial_risks
+
+generate_visual_reports:
+  description: "Criar dashboards e visualizações dos dados financeiros e recomendações"
+  expected_output: "Dashboard interativo com gráficos e relatórios visuais"
+  agent: report_generator
+  context:
+    - analyze_financial_data
+    - evaluate_llm_responses
+
+final_quality_check:
+  description: "Revisão final de qualidade e segurança de todas as saídas"
+  expected_output: "Relatório final aprovado com recomendações validadas e visualizações"
+  agent: quality_control
+  context:
+    - assess_financial_risks
+    - evaluate_llm_responses
+    - generate_visual_reports

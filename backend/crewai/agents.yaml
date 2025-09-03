@@ -7,7 +7,7 @@ data_extractor:
   allow_delegation: false
   tools:
 
-#TODO: Arrumar prompt -> recolher o extrato financeiro do usuário no banco -> realizar a categorização ? extrair insights e compilar gastos
+#TODO: Arrumar prompt -> recolher o extrato financeiro do usuário no banco -> realizar a categorização -> extrair insights e compilar gastos
 data_analyst:
   role: "Analista de Dados Financeiros"
   goal: "Extrair insights precisos dos dados financeiros do usuário"
@@ -55,7 +55,7 @@ model_evaluator:
   allow_delegation: false
   tools:
    
-# mark: Necessita?
+# MARK: Necessita?
 quality_control:
   role: "Controle de Qualidade"
   goal: "Garantir a qualidade final e segurança de todas as recomendações"
