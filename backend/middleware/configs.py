@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     
     # File Upload
     max_file_size: int = 10 * 1024 * 1024  # 10MB
-    allowed_file_types: list = [".csv", ".xlsx", ".xls", ".ofx"]
+    #allowed_file_types: list = [".csv", ".xlsx", ".xls", ".ofx"]
+    allowed_file_types: list = [".csv"]
     
     class Config:
         env_file = ".env"

@@ -12,12 +12,12 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
-    password = Column(String(255), nullable=False)  # Em produção, usar hash
+    password = Column(String(255), nullable=False)  # Hash da senha
+    criado_em = Column(DateTime, default=datetime.utcnow)
     ultimo_login = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
     perfil_financeiro = relationship("FinancialProfile", back_populates="usuario")
-    llm_responses = relationship("LLMResponse", back_populates="usuario")
 
 # TODO: Verificar qual o caminho o usuário pode seguir p solicitar requisição
 # É necessário que seja feito 2/3 dos pontos para que seja feito a requisição (?):
@@ -37,13 +37,13 @@ class FinancialProfile(Base):
     
     # Relacionamentos
     usuario = relationship("Usuario", back_populates="perfil_financeiro")
+    llm_responses = relationship("LLMResponse", back_populates="perfil_financeiro")
 
 # TODO: Rever modelo para armazenar as respostas das LLMs
 class LLMResponse(Base):
     __tablename__ = "llm_responses"
     
     id = Column(Integer, primary_key=True, index=True)
-    #usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     # Pela Arq de Software, a resposta das LLMs tem que buscar o perfil financeiro do usuario
     perfil_financeiro_id = Column(Integer, ForeignKey("perfil_financeiro.id"), nullable=False) 
     llm_responses = Column(Text, nullable=False)  # JSON com todas as respostas dos LLMs

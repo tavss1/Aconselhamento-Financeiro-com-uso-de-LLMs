@@ -18,7 +18,7 @@ class FinancialAdvisorCrew:
         self.llms = {
             'llama2': Ollama(model="llama2:7b"),
             'mistral': Ollama(model="mistral:7b"),
-            'codellama': Ollama(model="codellama:7b")
+            'gemma3': Ollama(model="gemma3:7b")
         }
         
         # Inicializar ferramentas
@@ -60,12 +60,11 @@ class FinancialAdvisorCrew:
     def _select_llm_for_agent(self, agent_name: str):
         """Seleciona LLM específico para cada agente"""
         llm_mapping = {
-            'data_analyst': self.llms['codellama'],      # Melhor para análise de dados
-            'financial_advisor': self.llms['llama2'],    # Melhor para conselhos
-            'risk_assessor': self.llms['mistral'],       # Melhor para avaliação
-            'report_generator': self.llms['codellama'],  # Melhor para estruturação
-            'model_evaluator': self.llms['mistral'],     # Melhor para avaliação
-            'quality_control': self.llms['llama2']       # Melhor para revisão
+            'data_collector': self.llms['llama2'],  # Melhor para coleta de dados
+            'data_analyst': self.llms['llama2'],      # Melhor para análise de dados
+            'financial_advisor': self.llms['llama2'],    # Melhor para conselhos      # Melhor para avaliação
+            'report_generator': self.llms['llama2'],  # Melhor para estruturação
+            'model_evaluator': self.llms['llama2'],     # Melhor para avaliação
         }
         return llm_mapping.get(agent_name, self.llms['llama2'])
     
@@ -105,12 +104,11 @@ class FinancialAdvisorCrew:
     def _extract_agent_outputs(self) -> Dict[str, Any]:
         """Extrai saídas específicas de cada agente"""
         return {
+            'extractor_financial_data': self.tasks['extractor_financial_data'].output,
             'data_analysis': self.tasks['analyze_financial_data'].output,
             'financial_advice': self.tasks['generate_financial_advice'].output,
-            'risk_assessment': self.tasks['assess_financial_risks'].output,
             'model_comparison': self.tasks['evaluate_llm_responses'].output,
-            'visual_reports': self.tasks['generate_visual_reports'].output,
-            'quality_report': self.tasks['final_quality_check'].output
+            'visual_reports': self.tasks['generate_visual_reports'].output
         }
     
     def _calculate_system_metrics(self) -> Dict[str, float]:
