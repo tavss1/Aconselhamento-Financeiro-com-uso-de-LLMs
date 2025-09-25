@@ -18,3 +18,5 @@ pyjwt
 pymysql
 email-validator
 python-multipart
+tqdm
+langchain-ollama
