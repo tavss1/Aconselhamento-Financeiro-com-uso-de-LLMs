@@ -1,0 +1,155 @@
+# TODO: Melhorar o prompt
+extractor_financial_data:
+  description: >
+    Analisar o extrato bancário fornecido pelo usuário para extrair e categorizar todas as transações financeiras.
+    Você deve:
+    1. Identificar padrões de gastos e receitas
+    2. Categorizar cada transação em categorias específicas (alimentação, transporte, lazer, etc.)
+    4. Calcular totais por categoria e percentuais de distribuição
+
+  expected_output: |
+    Um arquivo JSON estruturado contendo:
+    - Lista completa de transações categorizadas com data, valor, descrição e categoria
+    - Resumo por categoria com totais e percentuais
+    - Identificação de gastos recorrentes (mensalidades, assinaturas)
+    - Métricas de dispersão e variabilidade dos gastos
+    - Flags para transações que requerem atenção especial
+
+analyze_financial_data:
+  description: |
+    Compilar e estruturar todas as informações financeiras do usuário obtidas do banco de dados através das ferramentas 
+    DatabaseFinancialProfile e UserProfileBuilder. Você deve:
+    1. Usar a ferramenta DatabaseFinancialProfile para acessar dados do banco (questionnaire_data e objetivo)
+    2. Processar os dados através da UserProfileBuilder para gerar perfil normalizado
+    3. Analisar KPIs calculados (capacidade de poupança, debt-to-income, score financeiro)
+    4. Avaliar classificação de risco e perfil de investidor
+    5. Estruturar contexto completo para próximas etapas do pipeline CrewAI
+
+  expected_output: |
+    Um arquivo JSON estruturado contendo:
+    - Perfil financeiro completo com dados pessoais e financeiros básicos
+    - KPIs calculados (debt-to-income ratio, savings rate, financial score, emergency fund months)
+    - Objetivos financeiros com estimativas de tempo baseadas no fluxo de caixa
+    - Classificação de risco objetiva baseada em múltiplos indicadores
+    - Perfil de investidor recomendado (Conservador, Moderado, Arrojado com variações)
+    - Detalhamento de gastos por categoria (moradia, alimentação, transporte, outros)
+    - Contexto pessoal relevante (idade, estado civil, dependentes, profissão)
+
+  agent: data_analyst
+  tools:
+    - DatabaseFinancialProfile
+    - UserProfileBuilder
+  
+generate_financial_advice:
+  description: |
+    Gerar conselhos financeiros personalizados e práticos com base no perfil financeiro e padrões de gastos identificados.
+    Considerando o contexto brasileiro e as especificidades do mercado local, você deve:
+    1. Analisar o perfil completo vs. padrões de gastos categorizados
+    2. Identificar oportunidades de otimização imediatas e de médio prazo
+    3. Sugerir estratégias de poupança e investimento adequadas ao perfil
+    4. Propor plano de ação com metas mensuráveis e timeline realista
+    5. Considerar cenários de risco e alternativas de contingência
+
+  expected_output: |
+    Um arquivo JSON com conselhos estruturados incluindo:
+    - Análise detalhada do perfil vs. gastos categorizados
+    - Recomendações prioritárias por horizonte temporal (imediato, 30d, 90d, 12m)
+    - Oportunidades de economia específicas com valores estimados
+    - Estratégias de investimento adequadas ao perfil de risco
+    - Plano de ação com metas SMART e KPIs de acompanhamento
+    - Alertas e cuidados específicos baseados no perfil identificado
+    - Estimativas de impacto financeiro das recomendações
+
+  context:
+    - analyze_financial_data
+    - extractor_financial_data
+
+# assess_financial_risks:
+#   description: "Avaliar riscos das recomendações e validar adequação ao perfil do usuário"
+#   expected_output: "Relatório de risco com score de segurança para cada recomendação"
+#   agent: risk_assessor
+#   context:
+#     - generate_financial_advice
+
+evaluate_llm_responses:
+  description: |
+    Avaliar e comparar as respostas dos diferentes modelos LLM utilizados no processo de aconselhamento financeiro.
+    Você deve aplicar métricas objetivas e subjetivas para determinar a qualidade das recomendações:
+    1. Analisar precisão e relevância das recomendações financeiras
+    2. Verificar adequação ao perfil específico do usuário
+    3. Avaliar viabilidade prática das sugestões no contexto brasileiro
+    4. Medir completude e clareza das explicações fornecidas
+    5. Comparar consistência entre diferentes execuções do modelo
+
+  expected_output: |
+    Um arquivo JSON com avaliação detalhada contendo:
+    - Ranking dos modelos LLM por qualidade geral de resposta
+    - Scores específicos por critério (precisão, relevância, adequação, clareza)
+    - Análise comparativa das recomendações por modelo
+    - Identificação de pontos fortes e fracos de cada modelo
+    - Métricas de consistência e confiabilidade
+    - Recomendação do modelo mais adequado para o perfil específico
+    - Justificativas detalhadas para cada score atribuído
+  
+  context:
+    - generate_financial_advice
+
+compile_dashboard_data:
+  description: |
+    Estruturar todos os dados financeiros obtidos das tarefas anteriores em um formato JSON otimizado 
+    para renderização no dashboard React. A compilação deve incluir:
+
+    1. **Dados do Perfil Financeiro**: 
+       - Informações do questionário normalizadas
+       - KPIs calculados (capacidade de poupança, debt-to-income, score de risco)
+       - Objetivos financeiros com timeline
+
+    2. **Transações Categorizadas**:
+       - Resumo por categoria com cores e ícones
+       - Distribuição percentual para gráfico de pizza
+       - Evolução temporal para gráficos de linha
+       - Top transações por categoria
+
+    3. **Conselhos LLM Estruturados**:
+       - Recomendações organizadas por horizonte temporal (agora, 30d, 90d, 12m)
+       - Ações priorizadas com indicadores de impacto
+       - Metas mensuráveis com KPIs de acompanhamento
+
+    4. **Visualizações Pré-configuradas**:
+       - Datasets prontos para Chart.js/Recharts
+       - Configurações de cores e estilos
+       - Breakpoints responsivos para mobile/desktop
+       
+    5. **Métricas Comparativas**:
+       - Benchmarks e comparações com perfis similares
+       - Indicadores de progresso e metas
+       - Alertas e flags de atenção
+
+  expected_output: |
+    Um arquivo JSON estruturado contendo:
+    ```json
+    {
+      "profile_summary": { /* KPIs e dados do perfil */ },
+      "transactions_analysis": { /* Dados categorizados com charts config */ },
+      "financial_advice": { /* Conselhos estruturados por timeline */ },
+      "visualizations": { /* Datasets prontos para gráficos */ },
+      "comparative_metrics": { /* Benchmarks e comparações */ },
+      "ui_config": { /* Configurações de cores, layouts e responsividade */ }
+    }
+    ```
+    Optimizado para consumo direto pelo React frontend com minimal processing.
+
+  context:
+    - extractor_financial_data
+    - analyze_financial_data
+    - generate_financial_advice
+    - evaluate_llm_responses
+
+# final_quality_check:
+#   description: "Revisão final de qualidade e segurança de todas as saídas"
+#   expected_output: "Relatório final aprovado com recomendações validadas e visualizações"
+#   agent: quality_control
+#   context:
+#     - assess_financial_risks
+#     - evaluate_llm_responses
+#     - generate_visual_reports
