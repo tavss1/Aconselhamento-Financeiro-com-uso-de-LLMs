@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
 import { FinancialQuestionnaire } from '../Questionario/financialQuestionnaire';
 import { ExtractUpload } from '../Upload/extractUpload';
 import { SimpleDashboard } from '../Dashboard/simpleDashboard';
 
-export const SetupWizard = () => {
+export const SetupWizard = ({ onComplete, onViewDashboard }) => {
   const [currentStep, setCurrentStep] = useState('questionnaire');
   const [questionnaireData, setQuestionnaireData] = useState(null);
   const [extractData, setExtractData] = useState(null);
   const [error, setError] = useState(null);
-  const { token } = useAuth();
+  const { token, user, isAuthenticated } = useAuth();
 
   const handleQuestionnaireComplete = async (data) => {
     try {
@@ -20,6 +20,13 @@ export const SetupWizard = () => {
       console.log('É um objeto?', typeof data === 'object' && data !== null);
       console.log('Dados como JSON string:', JSON.stringify(data, null, 2));
       console.log('Token disponível:', !!token);
+      console.log('Usuário autenticado:', isAuthenticated());
+      console.log('Usuário:', user);
+
+      // Verificar se o usuário está autenticado
+      if (!isAuthenticated() || !token) {
+        throw new Error('Usuário não está autenticado. Faça login novamente.');
+      }
 
       // Verificar se dashboardService está disponível
       if (!dashboardService) {
@@ -111,10 +118,34 @@ export const SetupWizard = () => {
 
     case 'dashboard':
       return (
-        <SimpleDashboard
-          questionnaireData={questionnaireData}
-          extractData={extractData}
-        />
+        <div className="space-y-6">
+          <SimpleDashboard
+            questionnaireData={questionnaireData}
+            extractData={extractData}
+          />
+          
+          {/* Botões de ação após configuração inicial */}
+          <div className="flex justify-center space-x-4 mt-8 p-6 bg-gray-50 rounded-lg">
+            <button
+              onClick={() => onViewDashboard && onViewDashboard()}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Ver Dashboard Completo
+            </button>
+            <button
+              onClick={() => setCurrentStep('questionnaire')}
+              className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+            >
+              Editar Perfil
+            </button>
+            <button
+              onClick={() => setCurrentStep('upload')}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+            >
+              Enviar Novo Extrato
+            </button>
+          </div>
+        </div>
       );
 
     default:

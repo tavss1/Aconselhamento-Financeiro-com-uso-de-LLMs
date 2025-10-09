@@ -122,18 +122,64 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
       setCurrentStep(currentStep + 1);
       setValidationErrors({});
     } else {
-      // separação dos dados do objetivo do questionário
-      const { financial_goal, financial_goal_details, ...questionnaireData } = formData;
+      // Verificar campos obrigatórios antes de processar
+      const requiredFields = ['age', 'monthly_income', 'risk_profile', 'transportation_methods', 'dependents', 'financial_goal'];
+      const missingFields = [];
+      
+      requiredFields.forEach(field => {
+        const value = formData[field];
+        
+        // Validação especial para dependents - aceitar array vazio se "nenhum" foi selecionado
+        if (field === 'dependents') {
+          if (!value || !Array.isArray(value) || value.length === 0) {
+            missingFields.push(field);
+          }
+        } else if (!value || value === '') {
+          missingFields.push(field);
+        }
+      });
+      
+      if (missingFields.length > 0) {
+        console.error('❌ Campos obrigatórios faltando:', missingFields);
+        console.error('📋 FormData atual:', formData);
+        setValidationErrors({ submit: `Campos obrigatórios faltando: ${missingFields.join(', ')}` });
+        return;
+      }
 
-      const processedData = {
-        questionnaire_data: questionnaireData,
-        objective_data: {
-          financial_goal: financial_goal,
-          financial_goal_details: financial_goal_details
+      // Mapear os dados para o formato esperado pela API
+      const { financial_goal, financial_goal_details, ...rawData } = formData;
+
+      // Mapear questionnaire_data para os nomes esperados pela API (em inglês)
+      const questionnaire_data = {
+        age: rawData.age,
+        monthly_income: rawData.monthly_income,
+        dependents: rawData.dependents || [],
+        risk_profile: rawData.risk_profile,
+        debt_to_income_ratio: rawData.debtToIncomeRatio || 0.3,
+        liquid_assets: rawData.liquidAssets || 0,
+        transportation_methods: rawData.transportation_methods || "Transporte público"
+      };
+
+      // Mapear objective_data para os nomes esperados pela API (em inglês)
+      const objective_data = {
+        financial_goal: financial_goal,
+        financial_goal_details: financial_goal_details || {
+          target_amount: 0,
+          time_frame: "12 meses",
+          priority: "alta"
         }
       };
 
-      console.log('Dados processados:', processedData);
+      const processedData = {
+        questionnaire_data,
+        objective_data
+      };
+
+      console.log('📋 Dados brutos do formData:', formData);
+      console.log('🔄 Dados processados para API:', processedData);
+      console.log('✅ questionnaire_data:', questionnaire_data);
+      console.log('🎯 objective_data:', objective_data);
+      
       onComplete(processedData);
     }
   };
@@ -145,7 +191,12 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
   };
 
   const updateFormData = (name, value) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    console.log(`📝 Atualizando campo: ${name} = `, value);
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      console.log('📊 FormData atualizado:', newData);
+      return newData;
+    });
   };
 
   const renderField = (field) => {
@@ -419,6 +470,13 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
             </div>
           ))}
         </div>
+
+        {/* Exibir erro de submissão se houver */}
+        {validationErrors.submit && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800 text-sm">{validationErrors.submit}</p>
+          </div>
+        )}
 
         <div className="flex justify-between mt-8">
           <button

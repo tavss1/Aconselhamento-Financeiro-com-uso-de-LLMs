@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
 
 export const ExtractUpload = ({ onUploadComplete }) => {

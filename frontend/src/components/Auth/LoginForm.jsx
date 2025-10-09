@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DollarSign } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../context/AuthContext';
 
 export const LoginForm = () => {
   const [isLogin, setIsLogin] = useState(true);

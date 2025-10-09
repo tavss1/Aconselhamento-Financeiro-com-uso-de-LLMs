@@ -54,6 +54,12 @@ class ApiClient {
     const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Pegar token do localStorage se não foi fornecido
+      const savedToken = localStorage.getItem('access_token');
+      if (savedToken) {
+        headers['Authorization'] = `Bearer ${savedToken}`;
+      }
     }
 
     return this.request(endpoint, {
@@ -66,6 +72,12 @@ class ApiClient {
     const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Pegar token do localStorage se não foi fornecido
+      const savedToken = localStorage.getItem('access_token');
+      if (savedToken) {
+        headers['Authorization'] = `Bearer ${savedToken}`;
+      }
     }
 
     // Adicionar log para debug
@@ -97,6 +109,12 @@ class ApiClient {
     const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      // Pegar token do localStorage se não foi fornecido
+      const savedToken = localStorage.getItem('access_token');
+      if (savedToken) {
+        headers['Authorization'] = `Bearer ${savedToken}`;
+      }
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
