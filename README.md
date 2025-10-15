@@ -1,233 +1,240 @@
-# Aconselhamento-Financeiro-com-uso-de-LLMs
-Projeto acadêmico fullstack voltado ao TCC sob o curso de Bacharelado em Ciência da Computação
+# Sistema de Aconselhamento Financeiro com LLMs
 
-# Estrutura do Projeto
+Sistema fullstack acadêmico para Trabalho de Conclusão de Curso (TCC) em Ciência da Computação que oferece análise financeira personalizada utilizando múltiplos modelos de linguagem (LLMs) locais.
 
-## 📁 Estrutura de Pastas
+## 🏗️ Arquitetura Implementada
 
+### **Stack Tecnológico**
+- **Backend**: FastAPI + SQLAlchemy + MySQL
+- **Frontend**: React + TailwindCSS + Recharts
+- **LLMs Locais**: Ollama (Llama2, Mistral, Gemma3)
+- **Orquestração**: CrewAI Multi-Agent System
+- **Containerização**: Docker + Docker Compose
+
+### **Fluxo de Dados Implementado**
 ```
-financial-planning-ai/
-├── backend/                          # FastAPI Backend
-│   ├── main.py                      # Aplicação principal
-│   ├── models.py                    # Modelos SQLAlchemy
-│   ├── schemas.py                   # Schemas Pydantic
-│   ├── database.py                  # Configuração do banco
-│   ├── auth.py                      # Sistema de autenticação
-│   ├── config.py                    # Configurações
-│   ├── services/                    # Serviços da aplicação
-│   │   ├── crew_ai_service.py       # Integração CrewAI
-│   │   ├── llm_comparison_service.py # Comparação de LLMs
-│   │   └── __init__.py
-│   ├── requirements.txt             # Dependências Python
-│   ├── .env                        # Variáveis de ambiente
-│   └── docker-compose.yml          # Docker para MySQL/Ollama
-│
-├── frontend/                        # React Frontend
-│   ├── public/
-│   │   ├── index.html
-│   │   └── favicon.ico
-│   ├── src/
-│   │   ├── App.js                  # Componente principal
-│   │   ├── index.js                # Entry point
-│   │   ├── components/             # Componentes reutilizáveis
-│   │   │   ├── Auth/
-│   │   │   ├── Dashboard/
-│   │   │   ├── Questionnaire/
-│   │   │   └── Charts/
-│   │   ├── services/               # Serviços API
-│   │   │   └── api.js
-│   │   └── styles/                 # Estilos CSS
-│   │       └── global.css
-│   ├── package.json                # Dependências Node.js
-│   └── tailwind.config.js          # Configuração Tailwind
-│
-├── docs/                           # Documentação acadêmica
-│   ├── arquitetura.md              # Documento de arquitetura
-│   ├── metodologia.md              # Metodologia de desenvolvimento
-│   ├── resultados.md               # Análise de resultados
-│   └── referencias.md              # Referências bibliográficas
-│
-├── tests/                          # Testes automatizados
-│   ├── backend/
-│   │   ├── test_main.py
-│   │   ├── test_auth.py
-│   │   └── test_services.py
-│   └── frontend/
-│       └── __tests__/
-│
-├── scripts/                        # Scripts de automação
-│   ├── setup.sh                   # Setup do ambiente
-│   ├── start_dev.sh               # Iniciar desenvolvimento
-│   └── deploy.sh                  # Script de deploy
-│
-├── README.md                       # Documentação principal
-├── .gitignore                     # Arquivos ignorados pelo Git
-└── docker-compose.prod.yml        # Docker para produção
+Upload de Extrato → Questionário Financeiro → CrewAI Pipeline → Dashboard Analítico
 ```
 
-## 🚀 Instruções de Instalação
+## 🚀 Funcionalidades Reais Implementadas
 
-### Pré-requisitos
+### **1. Sistema de Autenticação e Perfil**
+- ✅ Registro e login de usuários
+- ✅ Gerenciamento de sessões com JWT
+- ✅ Perfis financeiros personalizados
+- ✅ Banco de dados MySQL com relacionamentos
 
-1. **Python 3.9+** - [Download](https://python.org)
-2. **Node.js 16+** - [Download](https://nodejs.org)
-3. **MySQL 8.0+** - [Download](https://mysql.com) ou use Docker
-4. **Ollama** - [Instalação](https://ollama.ai)
+### **2. Processamento de Extratos Bancários**
+- ✅ Upload de arquivos CSV/OFX
+- ✅ Categorização automática de transações
+- ✅ Integração com LLMs locais via Ollama
+- ✅ Análise de padrões de gastos
 
-### 1. Clone o Repositório
+### **3. Sistema Multi-Agente CrewAI**
+```yaml
+Agentes Implementados:
+- Extrator de Dados Financeiros
+- Consultor Financeiro Pessoal
+- Avaliador de Modelos LLM
+```
 
+### **4. Dashboard Analítico Interativo**
+- ✅ Visualizações com gráficos (Recharts)
+- ✅ Cards de métricas financeiras
+- ✅ Histórico de análises
+- ✅ Comparação entre modelos LLM
+- ✅ Interface responsiva
+
+### **5. Comparação de LLMs**
+- ✅ Métricas de qualidade e performance
+- ✅ Ranking automático de respostas
+- ✅ Sistema de scoring por confiabilidade
+
+## 📊 Dados Processados e Gerados
+
+### **Entrada do Sistema**
+```json
+{
+  "questionnaire_data": "Perfil financeiro do usuário",
+  "extrato_bancario": "Transações em CSV/OFX",
+  "objetivo_financeiro": "Meta definida pelo usuário"
+}
+```
+
+### **Saída do Sistema**
+```json
+{
+  "dashboard_data": {
+    "financial_summary": {
+      "total_income": "Receitas totais",
+      "total_expenses": "Gastos totais", 
+      "balance": "Saldo líquido"
+    },
+    "expense_categories": {
+      "alimentacao": "Valor categorizado",
+      "transporte": "Valor categorizado",
+      "lazer": "Valor categorizado"
+    },
+    "recent_advice": "Conselhos personalizados"
+  },
+  "llm_comparison": {
+    "best_response": "Melhor conselho gerado",
+    "metrics": "Métricas de comparação",
+    "ranking": "Ranking dos modelos"
+  }
+}
+```
+
+## � Configuração e Execução
+
+### **Pré-requisitos**
 ```bash
-https://github.com/tavss1/Aconselhamento-Financeiro-com-uso-de-LLMs.git
-cd financial-planning-ai
+- Docker & Docker Compose
+- Python 3.9+
+- Node.js 16+
+- 8GB RAM (para execução dos LLMs)
 ```
 
-### 2. Configuração do Backend
+### **1. Configuração via Docker (Recomendado)**
+```bash
+# Clone o repositório
+git clone https://github.com/tavss1/Aconselhamento-Financeiro-com-uso-de-LLMs.git
+cd Aconselhamento-Financeiro-com-uso-de-LLMs
 
+# Iniciar serviços de infraestrutura
+cd backend
+docker-compose up -d mysql ollama
+
+# Aguardar inicialização e baixar modelos LLM
+docker exec -it ollama_service ollama pull llama2
+docker exec -it ollama_service ollama pull mistral  
+docker exec -it ollama_service ollama pull gemma3
+```
+
+### **2. Configuração do Backend**
 ```bash
 cd backend
 
 # Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate     # Windows
+python -m venv cv
+cv\Scripts\activate  # Windows
+source cv/bin/activate  # Linux/Mac
 
 # Instalar dependências
 pip install -r requirements.txt
 
-# Configurar variáveis de ambiente
+# Configurar banco de dados
 cp .env.example .env
-# Edite o arquivo .env com suas configurações
+# Editar .env com as configurações
+
+# Executar aplicação
+No terminal com o ambiente virtual ativo, digite uvicorn api_temp:app --host 0.0.0.0 --host 8000 --reload
 ```
 
-### 3. Configuração do Banco de Dados
-
-#### Opção A: Docker (Recomendado)
-```bash
-# Na pasta backend/
-docker-compose up -d mysql
-```
-
-#### Opção B: MySQL Local
-```sql
-CREATE DATABASE financial_planning;
-CREATE USER 'app_user'@'localhost' IDENTIFIED BY 'sua_senha';
-GRANT ALL PRIVILEGES ON financial_planning.* TO 'app_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-### 4. Configuração do Ollama
-
-```bash
-# Instalar modelos LLM
-ollama pull llama2
-ollama pull mistral
-ollama pull codellama
-
-# Iniciar servidor Ollama (se não estiver rodando)
-ollama serve
-```
-
-### 5. Iniciar Backend
-
-```bash
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 6. Configuração do Frontend
-
+### **3. Configuração do Frontend**
 ```bash
 cd frontend
 
 # Instalar dependências
 npm install
 
-# Configurar Tailwind CSS
-npx tailwindcss init -p
-
-# Iniciar servidor de desenvolvimento
+# Iniciar aplicação
 npm start
 ```
 
-### 7. Verificar Instalação
+### **4. Acesso às Aplicações**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Documentação API**: http://localhost:8000/docs
+- **Ollama WebUI**: http://localhost:3000 (Docker)
+- **MySQL**: localhost:3307
 
-- Backend: http://localhost:8000/docs (Swagger UI)
-- Frontend: http://localhost:3000
-- MySQL: localhost:3306
-- Ollama: http://localhost:11434
+## 🧪 Validação e Testes
 
-## 📊 Arquitetura Técnica para Trabalho Acadêmico
-
-### 1. **Padrões Arquiteturais Implementados**
-
-#### Clean Architecture
-- **Entities**: Modelos de domínio (User, FinancialProfile)
-- **Use Cases**: Serviços de negócio (CrewAI, LLMComparison)
-- **Interface Adapters**: Controllers FastAPI
-- **Frameworks**: FastAPI, SQLAlchemy, React
-
-#### Repository Pattern
-```python
-class FinancialProfileRepository:
-    def __init__(self, db: Session):
-        self.db = db
-    
-    def create(self, profile: FinancialProfileCreate) -> FinancialProfile:
-        # Implementação da criação
-    
-    def get_by_user_id(self, user_id: int) -> FinancialProfile:
-        # Implementação da consulta
+### **Testes Implementados**
+```bash
+backend/test/
+├── test_api_integration.py      # Testes de integração da API
+├── test_auth.py                 # Autenticação e autorização
+├── test_dashboard_api.py        # Endpoints do dashboard
+├── test_financial_profile.py    # Perfil financeiro
+├── test_ollama_categorization.py # Categorização com LLMs
+└── test_parser_direct.py       # Parser de extratos
 ```
 
-#### Strategy Pattern para LLMs
-```python
-class LLMStrategy(ABC):
-    @abstractmethod
-    def generate_advice(self, user_data: dict) -> dict:
-        pass
+## 📈 Métricas de Performance Implementadas
 
-class OllamaStrategy(LLMStrategy):
-    def generate_advice(self, user_data: dict) -> dict:
-        # Implementação específica do Ollama
+### **Métricas de LLM**
+- ✅ **Tempo de Resposta**: Latência por modelo
+- ✅ **Score de Confiança**: Qualidade da resposta
+- ✅ **Taxa de Sucesso**: Respostas válidas vs inválidas
+
+### **Métricas Financeiras**
+- ✅ **Capacidade de Poupança**: Baseada no fluxo de caixa
+- ✅ **Debt-to-Income Ratio**: Proporção dívida/renda
+- ✅ **Score Financeiro**: Classificação de saúde financeira
+- ✅ **Categorização por Gastos**: Distribuição percentual
+
+## 🎯 Resultados Acadêmicos Demonstráveis
+
+### **Contribuições Técnicas**
+1. **Sistema Multi-Agente Especializado**: Implementação de pipeline CrewAI para análise financeira
+2. **Comparação Objetiva de LLMs**: Framework de avaliação para modelos de linguagem em contexto financeiro
+3. **Categorização Inteligente**: Sistema híbrido (regex + LLM) para classificação de transações
+4. **Dashboard Analítico**: Interface completa para visualização de dados financeiros
+
+### **Validação Prática**
+- ✅ **Upload e processamento** de extratos bancários reais
+- ✅ **Geração de conselhos** personalizados via LLMs
+- ✅ **Visualização interativa** de métricas financeiras
+- ✅ **Histórico de análises** com comparação temporal
+- ✅ **Sistema de navegação** completo entre funcionalidades
+
+## 📁 Estrutura de Dados Real
+
+### **Banco de Dados (MySQL)**
+```sql
+-- Tabelas implementadas
+usuarios (id, nome, email, password, criado_em)
+perfil_financeiro (id, usuario_id, questionnaire_data, objetivo, extrato)
+llm_responses (id, perfil_id, modelo_ia, transaction_response, advice_response, dashboard_response, score)
 ```
 
-### 2. **Métricas de Qualidade Implementadas**
-
-#### Métricas de LLM
-```python
-def calculate_llm_metrics(responses: List[Dict]) -> Dict:
-    return {
-        "accuracy": calculate_semantic_similarity(),
-        "relevance": calculate_financial_keyword_density(),
-        "completeness": calculate_response_completeness(),
-        "processing_time": measure_response_time(),
-        "confidence_score": calculate_confidence_composite()
-    }
+### **Armazenamento de Arquivos**
+```
+backend/uploads/
+├── {uuid}_extrato.csv           # Extratos processados
+├── {uuid}_categorized.json      # Transações categorizadas
+└── {uuid}_analysis.json         # Análises geradas
 ```
 
-#### Métricas de Sistema
-- **Latência**: Tempo de resposta das APIs
-- **Throughput**: Requisições por segundo
-- **Disponibilidade**: Uptime do sistema
-- **Precisão**: Acurácia dos conselhos financeiros
+## 🔄 Pipeline de Processamento Real
 
-### 3. **Justificativas Técnicas para Escolhas Arquiteturais**
+```mermaid
+graph TD
+    A[Upload de Extrato] --> B[Validação de Formato]
+    B --> C[Categorização via LLM]
+    C --> D[Análise Multi-Agente CrewAI]
+    D --> E[Comparação de LLMs]
+    E --> F[Compilação Dashboard]
+    F --> G[Persistência MySQL]
+    G --> H[Renderização Frontend]
+```
 
-#### FastAPI vs Flask/Django
-- **Performance**: 3x mais rápido que Flask
-- **Documentação Automática**: OpenAPI/Swagger integrado
-- **Type Hints**: Validação automática com Pydantic
-- **Async Support**: Suporte nativo para operações assíncronas
+## 🚀 Demonstração Funcional
 
-#### CrewAI vs LangChain
-- **Especialização**: Focado em sistemas multi-agente
-- **Flexibilidade**: Agentes especializados por domínio
-- **Orquestração**: Workflow sequencial otimizado
-- **Integração**: Suporte nativo para LLMs locais
+O sistema está completamente funcional e permite:
 
-#### MySQL vs PostgreSQL
-- **Compatibilidade**: Amplo suporte em hospedagens
-- **JSON Support**: Campos JSON nativos para flexibilidade
-- **Performance**: Otimizado para aplicações web
-- **Ferramentas**: Ecossistema maduro de ferramentas
+1. **Criar conta** e fazer login
+2. **Preencher questionário** financeiro personalizado
+3. **Fazer upload** de extrato bancário (CSV)
+4. **Aguardar processamento** via pipeline CrewAI
+5. **Visualizar dashboard** com métricas e gráficos
+6. **Consultar histórico** de análises anteriores
+7. **Comparar performance** entre diferentes LLMs
+8. **Navegar** entre configurações e resultados
+
+---
+
+**Desenvolvido para TCC em Ciência da Computação**  
+*Sistema completo de análise financeira com tecnologias modernas e LLMs locais*
