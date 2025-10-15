@@ -70,7 +70,14 @@ class DashboardService {
     };
     
     const token = this.getToken();
-    return this.apiClient.post('/api/financial/analyze-with-crewai', requestBody, token);
+    const result = await this.apiClient.post('/api/financial/analyze-with-crewai', requestBody, token);
+    
+    // Adicionar flag indicando que a análise foi concluída com sucesso
+    return {
+      ...result,
+      _analysisCompleted: true,
+      _shouldRedirectToDashboard: true
+    };
   }
 
   async getFinancialAnalysis() {
@@ -81,6 +88,11 @@ class DashboardService {
   async getAnalysisStatus(userId) {
     const token = this.getToken();
     return this.apiClient.get(`/api/financial/analysis-status/${userId}`, token);
+  }
+
+  async checkAnalysisStatus() {
+    const token = this.getToken();
+    return this.apiClient.get('/api/auth/check-analysis-status', token);
   }
 
   // Métodos legados para compatibilidade com simpleDashboard.jsx

@@ -1,16 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
 import { FinancialQuestionnaire } from '../Questionario/financialQuestionnaire';
 import { ExtractUpload } from '../Upload/extractUpload';
 import { SimpleDashboard } from '../Dashboard/simpleDashboard';
 
-export const SetupWizard = ({ onComplete, onViewDashboard }) => {
+export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => {
   const [currentStep, setCurrentStep] = useState('questionnaire');
   const [questionnaireData, setQuestionnaireData] = useState(null);
   const [extractData, setExtractData] = useState(null);
   const [error, setError] = useState(null);
+  const [showDashboardOption, setShowDashboardOption] = useState(false);
   const { token, user, isAuthenticated } = useAuth();
+
+  // Verificar se usuário já possui análise ao carregar o wizard
+  useEffect(() => {
+    checkForExistingAnalysis();
+  }, []);
+
+  const checkForExistingAnalysis = async () => {
+    try {
+      const analysisStatus = await dashboardService.checkAnalysisStatus();
+      if (analysisStatus.has_analysis) {
+        setShowDashboardOption(true);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar análise existente:', error);
+    }
+  };
 
   const handleQuestionnaireComplete = async (data) => {
     try {
@@ -106,7 +123,38 @@ export const SetupWizard = ({ onComplete, onViewDashboard }) => {
 
   switch (currentStep) {
     case 'questionnaire':
-      return <FinancialQuestionnaire onComplete={handleQuestionnaireComplete} />;
+      return (
+        <div>
+          {/* Banner para usuários com análise existente */}
+          {showDashboardOption && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <svg className="h-5 w-5 text-blue-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">
+                      Você já possui uma análise financeira concluída!
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      Você pode ir diretamente para o dashboard ou atualizar seus dados aqui.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onViewDashboard && onViewDashboard()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  Ver Dashboard
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <FinancialQuestionnaire onComplete={handleQuestionnaireComplete} />
+        </div>
+      );
 
     case 'upload':
       return (
@@ -122,6 +170,20 @@ export const SetupWizard = ({ onComplete, onViewDashboard }) => {
           <SimpleDashboard
             questionnaireData={questionnaireData}
             extractData={extractData}
+            onAnalysisComplete={() => {
+              console.log('✅ Pipeline de aconselhamento concluída, redirecionando para dashboard...');
+              if (onViewDashboard) {
+                onViewDashboard();
+              }
+            }}
+            onBackToHome={() => {
+              console.log('🏠 Voltando para tela inicial...');
+              if (onBackToWizard) {
+                onBackToWizard();
+              } else {
+                setCurrentStep('questionnaire');
+              }
+            }}
           />
           
           {/* Botões de ação após configuração inicial */}
@@ -149,6 +211,6 @@ export const SetupWizard = ({ onComplete, onViewDashboard }) => {
       );
 
     default:
-      return <SimpleDashboard />;
+      return <SimpleDashboard onBackToHome={() => setCurrentStep('questionnaire')} />;
   }
 };

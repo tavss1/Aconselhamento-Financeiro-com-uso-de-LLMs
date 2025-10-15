@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
-import { Loader2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ArrowLeft, Home } from 'lucide-react';
 import { financialDashboardService } from '../../services/financialDashboardService';
 import ExpenseBreakdownChart from './ExpenseBreakdownChart';
 import FinancialHealthCard from './FinancialHealthCard';
 import TransactionsList from './TransactionsList';
 import FinancialAdvicePanel from './FinancialAdvicePanel';
 
-const FinancialDashboard = () => {
+const FinancialDashboard = ({ onBackToHome }) => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -99,6 +99,19 @@ const FinancialDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* Botão de Navegação */}
+      {onBackToHome && (
+        <div className="mb-6">
+          <button
+            onClick={onBackToHome}
+            className="flex items-center text-blue-600 hover:text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Voltar para Configurações
+          </button>
+        </div>
+      )}
+
       {/* Header com informações do usuário */}
       <div className="flex justify-between items-center">
         <div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import FinancialDashboard from '../components/Dashboard/FinancialDashboard';
 
-const Dashboard = () => {
+const Dashboard = ({ onBackToHome }) => {
   const { user, loading } = useAuth();
 
   // Mostrar loading enquanto verifica autenticação
@@ -30,7 +30,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <FinancialDashboard />
+      <FinancialDashboard onBackToHome={onBackToHome} />
     </div>
   );
 };

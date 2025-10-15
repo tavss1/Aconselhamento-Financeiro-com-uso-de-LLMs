@@ -67,6 +67,48 @@ class FinancialDashboardService {
     return this.apiClient.get(`/financial/analysis-status/${userId}`, token);
   }
 
+  async getAnalysisHistory() {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('Token de autenticação não encontrado');
+    }
+
+    try {
+      console.log('🔍 Buscando histórico de análises...');
+      const response = await this.apiClient.get('/api/llm/latest-response', token);
+      console.log('📥 Histórico recebido:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao buscar histórico:', error);
+      throw new Error(error.message || 'Erro ao carregar histórico de análises');
+    }
+  }
+
+  async getAnalysisHistoryComplete() {
+    const token = this.getToken();
+    if (!token) {
+      throw new Error('Token de autenticação não encontrado');
+    }
+
+    try {
+      console.log('🔍 Buscando histórico completo de análises...');
+      
+      // Primeiro, buscar o perfil para obter o profile_id
+      const profile = await this.apiClient.get('/api/financial-profile', token);
+      if (!profile || !profile.id) {
+        throw new Error('Perfil financeiro não encontrado');
+      }
+
+      // Agora buscar o histórico completo
+      const response = await this.apiClient.get(`/api/llm/responses/${profile.id}`, token);
+      console.log('📥 Histórico completo recebido:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Erro ao buscar histórico completo:', error);
+      throw new Error(error.message || 'Erro ao carregar histórico completo de análises');
+    }
+  }
+
   /**
    * Processa e normaliza os dados do dashboard
    * @param {Object} rawData - Dados brutos do backend
@@ -74,98 +116,136 @@ class FinancialDashboardService {
    */
   processDashboardData(rawData) {
     console.log('🔍 Processando dados do dashboard:', rawData);
-    
     if (!rawData) {
       throw new Error('Dados do dashboard não encontrados');
     }
 
-    // Verificar se temos a estrutura esperada
-    const dashboard = rawData.dashboard || rawData.dashboard_data || rawData;
-    const profile = rawData.profile || {};
-    const transactions = rawData.transactions || {};
-    
-    console.log('📊 Estrutura encontrada:', {
-      hasDashboard: !!dashboard,
-      hasProfile: !!profile,
-      hasTransactions: !!transactions,
-      dashboardKeys: dashboard ? Object.keys(dashboard) : [],
-      rawDataKeys: Object.keys(rawData)
-    });
+    // Tentar acessar a estrutura real do backend
+    let dashboard = null;
+    if (rawData.data?.dashboard?.dashboard_data) {
+      dashboard = rawData.data.dashboard.dashboard_data;
+      console.log('Estrutura: rawData.data.dashboard.dashboard_data');
+    } else if (rawData.data?.dashboard) {
+      dashboard = rawData.data.dashboard;
+      console.log('Estrutura: rawData.data.dashboard');
+    } else if (rawData.dashboard_data) {
+      dashboard = rawData.dashboard_data;
+      console.log('Estrutura: rawData.dashboard_data');
+    } else if (rawData.dashboard) {
+      dashboard = rawData.dashboard;
+      console.log('Estrutura: rawData.dashboard');
+    } else {
+      dashboard = rawData;
+      console.log('Estrutura: rawData (usando objeto raiz)');
+    }
 
-    // Construir objeto de retorno com valores seguros
-    return {
-      // Informações do perfil
+    // Log da estrutura completa para debug
+    try {
+      console.log('🔍 Chaves do rawData:', Object.keys(rawData));
+      if (rawData.data) console.log('🔍 Chaves de rawData.data:', Object.keys(rawData.data));
+      if (rawData.data?.dashboard) console.log('🔍 Chaves de rawData.data.dashboard:', Object.keys(rawData.data.dashboard));
+      if (dashboard) console.log('🔍 Chaves do dashboard extraído:', Object.keys(dashboard));
+    } catch (e) {
+      console.log('Erro ao logar estrutura:', e);
+    }
+
+    // Extrair seções reais, sem valores default
+    const metadata = dashboard?.metadata;
+    const transactionsAnalysis = dashboard?.transactions_analysis;
+    const financialAdvice = dashboard?.financial_advice;
+    const visualizations = dashboard?.visualizations;
+    const comparativeMetrics = dashboard?.comparative_metrics;
+    const alertsAndNotifications = dashboard?.alerts_and_notifications;
+
+    // Log detalhado de cada seção
+    console.log('🔍 metadata:', metadata);
+    console.log('🔍 transactionsAnalysis:', transactionsAnalysis);
+    console.log('🔍 financialAdvice:', financialAdvice);
+    console.log('🔍 visualizations:', visualizations);
+    console.log('🔍 comparativeMetrics:', comparativeMetrics);
+    console.log('🔍 alertsAndNotifications:', alertsAndNotifications);
+
+    // Extrair dados do perfil dos comparative_metrics e transactions_analysis
+    const spendingPatterns = comparativeMetrics?.spending_patterns;
+    const summary = transactionsAnalysis?.summary;
+
+    // Construir objeto de retorno fiel aos dados reais (NÃO usar valores default)
+    const processedData = {
       profile: {
-        id: profile?.profile_id || profile?.id || null,
-        age: profile?.dados_pessoais?.idade || profile?.age || profile?.questionnaire_data?.age || 25,
-        monthlyIncome: profile?.renda_mensal || profile?.monthly_income || profile?.questionnaire_data?.monthly_income || 0,
-        monthlyExpenses: profile?.gastos_mensais || profile?.monthly_expenses || 0,
-        savingsCapacity: profile?.capacidade_poupanca || profile?.savings_capacity || 0,
-        debtToIncome: profile?.debt_to_income || profile?.questionnaire_data?.debt_to_income_ratio || 0.3,
-        savingsRate: profile?.savings_rate || 0,
-        liquidAssets: profile?.ativos_liquidos || profile?.liquid_assets || profile?.questionnaire_data?.liquid_assets || 0,
-        riskProfile: profile?.dados_pessoais?.risk_profile || profile?.risk_profile || profile?.questionnaire_data?.risk_profile || 'moderado',
-        goal: profile?.objetivo || profile?.objective_data || {}
+        id: rawData?.profile_id,
+        age: metadata?.age,
+        monthlyIncome: spendingPatterns?.monthly_income ?? summary?.total_income,
+        monthlyExpenses: spendingPatterns?.monthly_expenses ?? summary?.total_expenses,
+        savingsCapacity: spendingPatterns?.net_savings ?? summary?.net_flow,
+        debtToIncome: comparativeMetrics?.debt_to_income,
+        savingsRate: spendingPatterns?.savings_rate_percentage,
+        liquidAssets: comparativeMetrics?.liquid_assets,
+        riskProfile: metadata?.risk_profile,
+        goal: metadata?.goal
       },
-
-      // Análise de transações
       transactions: {
-        summary: dashboard?.dashboard_data?.transactions_analysis?.summary || dashboard?.transactions_analysis?.summary || {
-          total_transactions: 0,
-          total_income: 0,
-          total_expenses: 0,
-          net_flow: 0
-        },
-        categoriesBreakdown: dashboard?.dashboard_data?.transactions_analysis?.categories_breakdown || dashboard?.transactions_analysis?.categories_breakdown || [],
-        topTransactions: dashboard?.dashboard_data?.transactions_analysis?.top_transactions || dashboard?.transactions_analysis?.top_transactions || [],
-        rawTransactions: transactions?.transacoes || transactions?.transactions || []
+        summary: summary,
+        categoriesBreakdown: transactionsAnalysis?.categories_breakdown,
+        topTransactions: transactionsAnalysis?.top_transactions,
+        rawTransactions: transactionsAnalysis?.raw_transactions
       },
-
-      // Conselhos financeiros
       advice: {
-        overallAssessment: dashboard?.dashboard_data?.financial_advice?.overall_assessment || 
-                          dashboard?.financial_advice?.overall_assessment || 
-                          'Análise não disponível. Execute uma análise financeira primeiro.',
-        recommendations: dashboard?.dashboard_data?.financial_advice?.recommendations_by_timeline || 
-                        dashboard?.financial_advice?.recommendations_by_timeline || 
-                        dashboard?.dashboard_data?.financial_advice?.recommendations || 
-                        dashboard?.financial_advice?.recommendations || [],
-        measurableGoals: dashboard?.dashboard_data?.financial_advice?.measurable_goals || 
-                        dashboard?.financial_advice?.measurable_goals || [],
-        alerts: dashboard?.dashboard_data?.financial_advice?.alerts || 
-               dashboard?.financial_advice?.alerts || []
+        overallAssessment: financialAdvice?.overall_assessment,
+        recommendations: financialAdvice?.recommendations_by_timeline,
+        measurableGoals: financialAdvice?.measurable_goals,
+        summary: financialAdvice?.summary,
+        alerts: financialAdvice?.alerts
       },
-
-      // Visualizações
       charts: {
-        expensePieChart: dashboard?.dashboard_data?.visualizations?.expense_pie_chart || 
-                       dashboard?.visualizations?.expense_pie_chart || [],
-        monthlyFlowChart: dashboard?.dashboard_data?.visualizations?.monthly_flow_chart || 
-                         dashboard?.visualizations?.monthly_flow_chart || [],
-        categoryTrendChart: dashboard?.dashboard_data?.visualizations?.category_trend_chart || 
-                           dashboard?.visualizations?.category_trend_chart || []
+        expensePieChart: visualizations?.expense_pie_chart,
+        monthlyFlowChart: visualizations?.monthly_flow_chart,
+        categoryTrendChart: visualizations?.category_trend_chart
       },
-
-      // Métricas comparativas
-      benchmarks: dashboard?.dashboard_data?.comparative_metrics?.benchmarks || 
-                 dashboard?.comparative_metrics?.benchmarks || {},
-      spendingPatterns: dashboard?.dashboard_data?.comparative_metrics?.spending_patterns || 
-                       dashboard?.comparative_metrics?.spending_patterns || {},
-
-      // Alertas e notificações
-      alerts: dashboard?.dashboard_data?.alerts_and_notifications || 
-             dashboard?.alerts_and_notifications || [],
-
-      // Metadata
-      metadata: {
-        generatedAt: dashboard?.dashboard_data?.metadata?.generated_at || 
-                    dashboard?.metadata?.generated_at || 
-                    new Date().toISOString(),
-        totalDataPoints: dashboard?.dashboard_data?.metadata?.total_data_points || 
-                        dashboard?.metadata?.total_data_points || 0,
-        llmModel: rawData?.metadata?.llm_model || 'Não especificado'
-      }
+      benchmarks: comparativeMetrics?.benchmarks,
+      spendingPatterns: spendingPatterns,
+      alerts: this.formatAlerts(alertsAndNotifications),
+      metadata: metadata
     };
+
+    console.log('✅ Dados processados finais:', processedData);
+    return processedData;
+  }
+
+  /**
+   * Formata alertas da nova estrutura
+   * @param {Object} alertsData - Dados de alertas
+   * @returns {Array} Array de alertas formatados
+   */
+  formatAlerts(alertsData) {
+    const alerts = [];
+    
+    // Alertas urgentes
+    if (alertsData?.urgent) {
+      alertsData.urgent.forEach(alert => {
+        alerts.push({
+          title: alert.title,
+          message: alert.message,
+          severity: alert.priority === 'critical' ? 'high' : 'medium',
+          type: alert.type,
+          actionRequired: alert.action_required
+        });
+      });
+    }
+    
+    // Alertas informativos
+    if (alertsData?.informational) {
+      alertsData.informational.forEach(alert => {
+        alerts.push({
+          title: alert.title,
+          message: alert.message,
+          severity: 'low',
+          type: alert.type,
+          actionRequired: alert.action_required || false
+        });
+      });
+    }
+    
+    return alerts;
   }
 
   /**

@@ -9,13 +9,11 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
     monthly_income: '',
     risk_profile: '',
     transportation_methods: '',
-    // Simplificado: apenas um campo para objetivo
     financial_goal: '',
     financial_goal_details: {
       target_amount: '',
       time_frame: ''
     },
-    // Simplificado: apenas um array para dependentes com type e quantity
     dependents: []
   });
 
@@ -123,7 +121,7 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
       setValidationErrors({});
     } else {
       // Verificar campos obrigatórios antes de processar
-      const requiredFields = ['age', 'monthly_income', 'risk_profile', 'transportation_methods', 'dependents', 'financial_goal'];
+      const requiredFields = ['age', 'monthly_income', 'transportation_methods', 'dependents', 'financial_goal'];
       const missingFields = [];
       
       requiredFields.forEach(field => {
@@ -155,19 +153,13 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
         monthly_income: rawData.monthly_income,
         dependents: rawData.dependents || [],
         risk_profile: rawData.risk_profile,
-        debt_to_income_ratio: rawData.debtToIncomeRatio || 0.3,
-        liquid_assets: rawData.liquidAssets || 0,
-        transportation_methods: rawData.transportation_methods || "Transporte público"
+        transportation_methods: rawData.transportation_methods
       };
 
       // Mapear objective_data para os nomes esperados pela API (em inglês)
       const objective_data = {
         financial_goal: financial_goal,
-        financial_goal_details: financial_goal_details || {
-          target_amount: 0,
-          time_frame: "12 meses",
-          priority: "alta"
-        }
+        financial_goal_details: financial_goal_details
       };
 
       const processedData = {

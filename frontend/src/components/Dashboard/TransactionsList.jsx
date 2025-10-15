@@ -48,6 +48,20 @@ const TransactionsList = ({ transactions, summary }) => {
     }
   };
 
+  // Obter cor do nível de impacto
+  const getImpactColor = (impactLevel) => {
+    switch (impactLevel?.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
   // Obter cor da categoria
   const getCategoryColor = (category) => {
     const colors = {
@@ -57,9 +71,13 @@ const TransactionsList = ({ transactions, summary }) => {
       'Entretenimento': 'bg-purple-100 text-purple-800',
       'Educação': 'bg-yellow-100 text-yellow-800',
       'Casa': 'bg-red-100 text-red-800',
+      'Moradia': 'bg-red-100 text-red-800',
       'Compras': 'bg-pink-100 text-pink-800',
+      'Mercado': 'bg-pink-100 text-pink-800',
       'Transferências': 'bg-gray-100 text-gray-800',
-      'Renda': 'bg-emerald-100 text-emerald-800'
+      'Renda': 'bg-emerald-100 text-emerald-800',
+      'Serviços': 'bg-indigo-100 text-indigo-800',
+      'Outros': 'bg-slate-100 text-slate-800'
     };
     
     return colors[category] || 'bg-gray-100 text-gray-800';
@@ -165,11 +183,16 @@ const TransactionsList = ({ transactions, summary }) => {
                       <div className="flex items-center space-x-2 mt-1">
                         <Calendar className="h-3 w-3 text-gray-400" />
                         <span className="text-xs text-gray-500">
-                          {new Date(transaction.date).toLocaleDateString('pt-BR')}
+                          {transaction.date ? new Date(transaction.date.split('/').reverse().join('-')).toLocaleDateString('pt-BR') : 'Data não informada'}
                         </span>
                         <Badge className={`text-xs ${getCategoryColor(transaction.category)}`}>
-                          {transaction.category}
+                          {transaction.category || 'Sem categoria'}
                         </Badge>
+                        {transaction.impact_level && (
+                          <Badge className={`text-xs border ${getImpactColor(transaction.impact_level)}`}>
+                            {transaction.impact_level}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>

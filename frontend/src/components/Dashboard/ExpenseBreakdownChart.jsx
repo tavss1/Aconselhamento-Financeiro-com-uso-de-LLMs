@@ -11,19 +11,60 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
     '#800080', '#ffa500', '#a52a2a', '#808080', '#000080'
   ];
 
-  // Preparar dados para o gráfico
-  const chartData = Object.entries(data).map(([category, amount], index) => ({
-    name: category,
-    value: Math.abs(amount), // Usar valor absoluto para o gráfico
-    originalValue: amount,
-    color: COLORS[index % COLORS.length],
-    percentage: 0 // Será calculado abaixo
-  }));
+  // Preparar dados para o gráfico baseado na nova estrutura
+  let chartData = [];
 
-  // Calcular total e porcentagens
+  // Verificar se os dados estão na nova estrutura (categories_breakdown)
+  if (Array.isArray(data) && data.length > 0) {
+    // Nova estrutura: array de objetos com category, amount, etc.
+    chartData = data
+      .filter(item => item.amount < 0) // Apenas gastos (valores negativos)
+      .map((item, index) => ({
+        name: item.category || 'Categoria não especificada',
+        value: Math.abs(item.amount), // Usar valor absoluto para o gráfico
+        originalValue: item.amount,
+        color: item.color || COLORS[index % COLORS.length],
+        percentage: item.percentage || 0,
+        transaction_count: item.transaction_count || 0,
+        icon: item.icon || 'circle'
+      }));
+  } else if (typeof data === 'object' && data !== null) {
+    // Estrutura antiga: objeto com categorias como chaves
+    chartData = Object.entries(data).map(([category, amount], index) => ({
+      name: category,
+      value: Math.abs(amount), // Usar valor absoluto para o gráfico
+      originalValue: amount,
+      color: COLORS[index % COLORS.length],
+      percentage: 0, // Será calculado abaixo
+      transaction_count: 0,
+      icon: 'circle'
+    }));
+  }
+
+  // Se não há dados, mostrar estado vazio
+  if (chartData.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Distribuição de Gastos por Categoria</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-12">
+            <div className="text-gray-500">
+              Nenhum dado de gastos disponível para análise
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Calcular total e porcentagens se não foram fornecidas
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
   chartData.forEach(item => {
-    item.percentage = ((item.value / total) * 100).toFixed(1);
+    if (!item.percentage) {
+      item.percentage = ((item.value / total) * 100).toFixed(1);
+    }
   });
 
   // Ordenar por valor (maiores primeiro)
@@ -118,9 +159,16 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-sm font-medium text-gray-700">
-                      {item.name}
-                    </span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">
+                        {item.name}
+                      </span>
+                      {item.transaction_count > 0 && (
+                        <div className="text-xs text-gray-500">
+                          {item.transaction_count} transação{item.transaction_count !== 1 ? 'ões' : ''}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-semibold text-gray-800">

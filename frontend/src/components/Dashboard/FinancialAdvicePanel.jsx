@@ -18,6 +18,7 @@ const FinancialAdvicePanel = ({ advice }) => {
   const [expandedSections, setExpandedSections] = useState({
     immediate: true,
     shortTerm: false,
+    mediumTerm: false,
     longTerm: false,
     goals: false
   });
@@ -29,11 +30,49 @@ const FinancialAdvicePanel = ({ advice }) => {
     }));
   };
 
+  // Função para processar alertas (strings ou array)
+  const processAlerts = (alerts) => {
+    if (typeof alerts === 'string') {
+      return [{ title: 'Alerta', message: alerts }];
+    }
+    if (Array.isArray(alerts)) {
+      return alerts.map((alert, index) => {
+        if (typeof alert === 'string') {
+          return { title: `Alerta ${index + 1}`, message: alert };
+        }
+        return alert;
+      });
+    }
+    return [];
+  };
+
+  // Função para processar metas mensuráveis (objeto ou array)
+  const processMeasurableGoals = (goals) => {
+    if (!goals) return [];
+    
+    if (typeof goals === 'object' && !Array.isArray(goals)) {
+      // Se for objeto, converter para array de objetivos
+      return Object.entries(goals).map(([key, value]) => ({
+        title: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        description: value,
+        target: 'Conforme descrito',
+        timeframe: 'Conforme descrito'
+      }));
+    }
+    
+    if (Array.isArray(goals)) {
+      return goals;
+    }
+    
+    return [];
+  };
+
   // Configuração de prioridades
   const getPriorityConfig = (priority) => {
     switch (priority?.toLowerCase()) {
       case 'alta':
       case 'high':
+      case 'critical':
         return {
           color: 'text-red-600',
           bg: 'bg-red-50',
@@ -70,44 +109,151 @@ const FinancialAdvicePanel = ({ advice }) => {
     }
   };
 
-  // Configuração de timeline
-  const getTimelineConfig = (timeline) => {
-    switch (timeline?.toLowerCase()) {
-      case 'imediato':
-      case 'immediate':
-        return { label: 'Imediato', color: 'text-red-600', icon: AlertTriangle };
-      case 'curto prazo':
-      case 'short_term':
-        return { label: 'Curto Prazo', color: 'text-orange-600', icon: Clock };
-      case 'longo prazo':
-      case 'long_term':
-        return { label: 'Longo Prazo', color: 'text-green-600', icon: TrendingUp };
-      default:
-        return { label: 'Geral', color: 'text-blue-600', icon: Target };
-    }
+  // Renderizar seção de recomendações
+  const renderRecommendationSection = (recommendations, title, icon, color, badgeVariant, sectionKey) => {
+    if (!recommendations || recommendations.length === 0) return null;
+
+    const Icon = icon;
+    
+    return (
+      <div className="border rounded-lg">
+        <Button
+          variant="ghost"
+          className="w-full justify-between p-4"
+          onClick={() => toggleSection(sectionKey)}
+        >
+          <div className="flex items-center space-x-2">
+            <Icon className={`h-4 w-4 ${color}`} />
+            <span className="font-medium">{title}</span>
+            <Badge variant={badgeVariant} className="text-xs">
+              {recommendations.length} ações
+            </Badge>
+          </div>
+          {expandedSections[sectionKey] ? <ChevronUp /> : <ChevronDown />}
+        </Button>
+        
+        {expandedSections[sectionKey] && (
+          <div className="px-4 pb-4 space-y-3">
+            {recommendations.map((rec, index) => {
+              const config = getPriorityConfig(rec.impact || rec.priority);
+              const IconItem = config.icon;
+              
+              return (
+                <div key={index} className={`p-3 rounded-lg ${config.bg} ${config.border} border`}>
+                  <div className="flex items-start space-x-3">
+                    <IconItem className={`h-4 w-4 mt-0.5 ${config.color}`} />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800 mb-1">
+                        {rec?.title || rec?.action || 'Ação recomendada'}
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {rec?.description || rec?.rationale || 'Descrição não disponível'}
+                      </p>
+                      {rec?.expected_outcome && (
+                        <div className="text-xs text-gray-500">
+                          <strong>Resultado esperado:</strong> {rec.expected_outcome}
+                        </div>
+                      )}
+                      {rec?.effort && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          <strong>Esforço necessário:</strong> {rec.effort}
+                        </div>
+                      )}
+                    </div>
+                    <Badge variant={config.badge} className="text-xs">
+                      {rec?.impact || rec?.priority || 'Média'}
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="space-y-6">
-      {/* Avaliação Geral */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Lightbulb className="h-5 w-5 text-yellow-500" />
-            <span>Avaliação Financeira</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-sm max-w-none">
-            <p className="text-gray-700 leading-relaxed">
-              {advice?.overallAssessment || 'Análise financeira não disponível. Execute uma análise para ver recomendações personalizadas.'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Score de Saúde Financeira */}
+      {advice?.overallAssessment?.health_score && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+              <span>Score de Saúde Financeira</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-3xl font-bold text-blue-600">
+                {advice.overallAssessment.health_score.toFixed(1)}/10
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600">Prioridade:</div>
+                <Badge 
+                  variant={advice.overallAssessment.priority_level === 'high' ? 'destructive' : 'default'}
+                  className="text-xs"
+                >
+                  {advice.overallAssessment.priority_level}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* Principais preocupações */}
+            {advice.overallAssessment.main_concerns && advice.overallAssessment.main_concerns.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-medium text-gray-800 mb-2">Principais Preocupações:</h4>
+                <div className="space-y-1">
+                  {advice.overallAssessment.main_concerns.map((concern, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      <span className="text-sm text-gray-700">{concern}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Principais pontos fortes */}
+            {advice.overallAssessment.main_strengths && advice.overallAssessment.main_strengths.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">Pontos Fortes:</h4>
+                <div className="space-y-1">
+                  {advice.overallAssessment.main_strengths.map((strength, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-gray-700">{strength}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resumo da Análise */}
+      {advice?.summary && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Lightbulb className="h-5 w-5 text-yellow-500" />
+              <span>Resumo da Análise</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm max-w-none">
+              <p className="text-gray-700 leading-relaxed">
+                {advice.summary}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Alertas Críticos */}
-      {advice?.alerts && advice.alerts.length > 0 && (
+      {advice?.alerts && processAlerts(advice.alerts).length > 0 && (
         <Card className="border-red-200 bg-red-50">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-red-700">
@@ -116,11 +262,11 @@ const FinancialAdvicePanel = ({ advice }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {advice.alerts.map((alert, index) => (
+            {processAlerts(advice.alerts).map((alert, index) => (
               <Alert key={index} className="border-red-200 bg-white">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>{alert?.title || 'Alerta'}:</strong> {alert?.message || 'Alerta sem detalhes'}
+                  <strong>{alert?.title || 'Alerta'}:</strong> {alert?.message || alert}
                 </AlertDescription>
               </Alert>
             ))}
@@ -142,168 +288,49 @@ const FinancialAdvicePanel = ({ advice }) => {
         <CardContent className="space-y-4">
           
           {/* Ações Imediatas */}
-          {advice?.recommendations?.immediate && advice.recommendations.immediate.length > 0 && (
-            <div className="border rounded-lg">
-              <Button
-                variant="ghost"
-                className="w-full justify-between p-4"
-                onClick={() => toggleSection('immediate')}
-              >
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <span className="font-medium">Ações Imediatas</span>
-                  <Badge variant="destructive" className="text-xs">
-                    {advice.recommendations.immediate.length} ações
-                  </Badge>
-                </div>
-                {expandedSections.immediate ? <ChevronUp /> : <ChevronDown />}
-              </Button>
-              
-              {expandedSections.immediate && (
-                <div className="px-4 pb-4 space-y-3">
-                  {advice.recommendations.immediate.map((rec, index) => {
-                    const config = getPriorityConfig(rec.priority);
-                    const Icon = config.icon;
-                    
-                    return (
-                      <div key={index} className={`p-3 rounded-lg ${config.bg} ${config.border} border`}>
-                        <div className="flex items-start space-x-3">
-                          <Icon className={`h-4 w-4 mt-0.5 ${config.color}`} />
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800 mb-1">
-                              {rec?.title || rec?.action || 'Ação recomendada'}
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2">
-                              {rec?.description || rec?.rationale || 'Descrição não disponível'}
-                            </p>
-                            {rec?.expected_outcome && (
-                              <div className="text-xs text-gray-500">
-                                <strong>Resultado esperado:</strong> {rec.expected_outcome}
-                              </div>
-                            )}
-                          </div>
-                          <Badge variant={config.badge} className="text-xs">
-                            {rec?.priority || 'Alta'}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          {renderRecommendationSection(
+            advice?.recommendations?.immediate, 
+            'Ações Imediatas', 
+            AlertTriangle, 
+            'text-red-600', 
+            'destructive', 
+            'immediate'
           )}
 
           {/* Curto Prazo */}
-          {advice?.recommendations?.short_term && advice.recommendations.short_term.length > 0 && (
-            <div className="border rounded-lg">
-              <Button
-                variant="ghost"
-                className="w-full justify-between p-4"
-                onClick={() => toggleSection('shortTerm')}
-              >
-                <div className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4 text-orange-600" />
-                  <span className="font-medium">Curto Prazo (1-6 meses)</span>
-                  <Badge variant="warning" className="text-xs">
-                    {advice.recommendations.short_term.length} ações
-                  </Badge>
-                </div>
-                {expandedSections.shortTerm ? <ChevronUp /> : <ChevronDown />}
-              </Button>
-              
-              {expandedSections.shortTerm && (
-                <div className="px-4 pb-4 space-y-3">
-                  {advice.recommendations.short_term.map((rec, index) => {
-                    const config = getPriorityConfig(rec?.priority);
-                    const Icon = config.icon;
-                    
-                    return (
-                      <div key={index} className={`p-3 rounded-lg ${config.bg} ${config.border} border`}>
-                        <div className="flex items-start space-x-3">
-                          <Icon className={`h-4 w-4 mt-0.5 ${config.color}`} />
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800 mb-1">
-                              {rec?.title || rec?.action || 'Ação recomendada'}
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2">
-                              {rec?.description || rec?.rationale || 'Descrição não disponível'}
-                            </p>
-                            {rec?.expected_outcome && (
-                              <div className="text-xs text-gray-500">
-                                <strong>Resultado esperado:</strong> {rec.expected_outcome}
-                              </div>
-                            )}
-                          </div>
-                          <Badge variant={config.badge} className="text-xs">
-                            {rec?.priority || 'Média'}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          {renderRecommendationSection(
+            advice?.recommendations?.short_term, 
+            'Curto Prazo (1-6 meses)', 
+            Clock, 
+            'text-orange-600', 
+            'warning', 
+            'shortTerm'
+          )}
+
+          {/* Médio Prazo */}
+          {renderRecommendationSection(
+            advice?.recommendations?.medium_term, 
+            'Médio Prazo (6-12 meses)', 
+            Target, 
+            'text-blue-600', 
+            'default', 
+            'mediumTerm'
           )}
 
           {/* Longo Prazo */}
-          {advice?.recommendations?.long_term && advice.recommendations.long_term.length > 0 && (
-            <div className="border rounded-lg">
-              <Button
-                variant="ghost"
-                className="w-full justify-between p-4"
-                onClick={() => toggleSection('longTerm')}
-              >
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="font-medium">Longo Prazo (6+ meses)</span>
-                  <Badge variant="success" className="text-xs">
-                    {advice.recommendations.long_term.length} ações
-                  </Badge>
-                </div>
-                {expandedSections.longTerm ? <ChevronUp /> : <ChevronDown />}
-              </Button>
-              
-              {expandedSections.longTerm && (
-                <div className="px-4 pb-4 space-y-3">
-                  {advice.recommendations.long_term.map((rec, index) => {
-                    const config = getPriorityConfig(rec?.priority);
-                    const Icon = config.icon;
-                    
-                    return (
-                      <div key={index} className={`p-3 rounded-lg ${config.bg} ${config.border} border`}>
-                        <div className="flex items-start space-x-3">
-                          <Icon className={`h-4 w-4 mt-0.5 ${config.color}`} />
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800 mb-1">
-                              {rec?.title || rec?.action || 'Ação recomendada'}
-                            </div>
-                            <p className="text-sm text-gray-600 mb-2">
-                              {rec?.description || rec?.rationale || 'Descrição não disponível'}
-                            </p>
-                            {rec?.expected_outcome && (
-                              <div className="text-xs text-gray-500">
-                                <strong>Resultado esperado:</strong> {rec.expected_outcome}
-                              </div>
-                            )}
-                          </div>
-                          <Badge variant={config.badge} className="text-xs">
-                            {rec?.priority || 'Baixa'}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          {renderRecommendationSection(
+            advice?.recommendations?.long_term, 
+            'Longo Prazo (12+ meses)', 
+            TrendingUp, 
+            'text-green-600', 
+            'success', 
+            'longTerm'
           )}
         </CardContent>
       </Card>
 
       {/* Metas Mensuráveis */}
-      {advice?.measurableGoals && advice.measurableGoals.length > 0 && (
+      {advice?.measurableGoals && processMeasurableGoals(advice.measurableGoals).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -313,20 +340,17 @@ const FinancialAdvicePanel = ({ advice }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {advice.measurableGoals.map((goal, index) => (
+              {processMeasurableGoals(advice.measurableGoals).map((goal, index) => (
                 <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
                   <div className="font-medium text-purple-800 mb-1">
-                    {goal?.goal || goal?.title || 'Meta não especificada'}
+                    {goal?.title || goal?.goal || 'Meta não especificada'}
                   </div>
                   <div className="text-sm text-purple-600 mb-2">
-                    <strong>Meta:</strong> {goal?.target_value || goal?.target || 'Valor não especificado'}
+                    {goal?.description || goal?.target || 'Descrição não disponível'}
                   </div>
-                  <div className="text-sm text-purple-600">
-                    <strong>Prazo:</strong> {goal?.timeframe || goal?.deadline || 'Prazo não definido'}
-                  </div>
-                  {goal?.current_status && (
+                  {goal?.timeframe && (
                     <div className="text-xs text-purple-500 mt-1">
-                      Status atual: {goal.current_status}
+                      <strong>Prazo:</strong> {goal.timeframe}
                     </div>
                   )}
                 </div>

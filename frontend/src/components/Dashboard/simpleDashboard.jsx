@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, LogOut, Brain, FileText } from 'lucide-react';
+import { DollarSign, TrendingUp, LogOut, Brain, FileText, History, Calendar, Star, ExternalLink, Home, ArrowLeft } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
+import { financialDashboardService } from '../../services/financialDashboardService';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const NAVIGATION_TABS = [
   { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
-  { id: 'advice', label: 'Conselhos IA', icon: Brain },
+  { id: 'history', label: 'Histórico', icon: History },
   { id: 'comparison', label: 'Comparação LLMs', icon: FileText }
 ];
 
-export const SimpleDashboard = () => {
+export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extractData, onBackToHome }) => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [llmComparison, setLlmComparison] = useState(null);
   const [generatingAdvice, setGeneratingAdvice] = useState(false);
+  const [redirectingToDashboard, setRedirectingToDashboard] = useState(false);
+  const [analysisHistory, setAnalysisHistory] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const { token, user, logout } = useAuth();
 
   useEffect(() => {
@@ -35,12 +39,65 @@ export const SimpleDashboard = () => {
     }
   };
 
+  const fetchAnalysisHistory = async () => {
+    if (analysisHistory) return; // Já carregado
+    
+    setLoadingHistory(true);
+    try {
+      const history = await financialDashboardService.getAnalysisHistoryComplete();
+      setAnalysisHistory(history);
+      console.log('📋 Histórico carregado:', history);
+    } catch (error) {
+      console.error('Erro ao carregar histórico:', error);
+      setAnalysisHistory({ total_analyses: 0, all_analyses: [], latest_analysis: null });
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Data inválida';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Data inválida';
+      
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'Data inválida';
+    }
+  };
+
+  const openDashboardFromHistory = (analysisId) => {
+    if (onAnalysisComplete) {
+      console.log('🚀 Abrindo dashboard para análise:', analysisId);
+      onAnalysisComplete();
+    }
+  };
+
   const generateFinancialAdvice = async () => {
     setGeneratingAdvice(true);
     try {
       const result = await dashboardService.generateFinancialAdvice(token);
       setLlmComparison(result);
       fetchDashboardData();
+      
+      // Se a análise foi concluída e existe callback, chama o redirecionamento
+      if (result._analysisCompleted && result._shouldRedirectToDashboard && onAnalysisComplete) {
+        console.log('🚀 Análise CrewAI concluída, redirecionando para dashboard completo');
+        setRedirectingToDashboard(true);
+        
+        // Pequeno delay para permitir que o usuário veja a conclusão
+        setTimeout(() => {
+          onAnalysisComplete();
+        }, 3000);
+      }
     } catch (error) {
       console.error('Erro:', error);
       alert('Erro ao gerar conselhos financeiros');
@@ -69,6 +126,15 @@ export const SimpleDashboard = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              {onBackToHome && (
+                <button
+                  onClick={onBackToHome}
+                  className="flex items-center text-gray-600 hover:text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Tela Inicial
+                </button>
+              )}
               <span className="text-gray-600">Olá, {user?.name}</span>
               <button
                 onClick={logout}
@@ -90,7 +156,12 @@ export const SimpleDashboard = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id === 'history' && !analysisHistory) {
+                      fetchAnalysisHistory();
+                    }
+                  }}
                   className={`flex items-center px-1 py-4 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
@@ -186,11 +257,11 @@ export const SimpleDashboard = () => {
                 </div>
               )}
 
-              {/* Conselhos Recentes */}
+              {/* Conselhos Financeiros */}
               <div className="bg-white p-6 rounded-xl shadow-md">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-800">
-                    Últimos Conselhos
+                    Conselhos Financeiros IA
                   </h3>
                   <button
                     onClick={generateFinancialAdvice}
@@ -202,83 +273,264 @@ export const SimpleDashboard = () => {
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {dashboardData?.recent_advice?.slice(0, 3).map((advice, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        {typeof advice.advice === 'string' ? advice.advice : advice.advice?.advice || 'Conselho não disponível'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        {new Date(advice.created_at).toLocaleDateString('pt-BR')}
-                      </p>
+                {generatingAdvice && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <p className="text-gray-600">
+                      Nossa IA está analisando seus dados financeiros...
+                    </p>
+                  </div>
+                )}
+
+                {redirectingToDashboard && (
+                  <div className="text-center py-8">
+                    <div className="animate-pulse rounded-full h-8 w-8 bg-green-600 mx-auto mb-3 flex items-center justify-center">
+                      <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
                     </div>
-                  )) || (
-                    <p className="text-gray-500 text-center py-8">
+                    <p className="text-green-600 font-medium">
+                      ✅ Análise concluída com sucesso!
+                    </p>
+                    <p className="text-gray-600 text-sm mt-1">
+                      Redirecionando para o dashboard completo...
+                    </p>
+                  </div>
+                )}
+
+                {llmComparison?.best_response && !redirectingToDashboard && !generatingAdvice && (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                      <h4 className="text-md font-semibold text-green-800 mb-2">
+                        Melhor Conselho - {llmComparison.best_response.llm_name}
+                      </h4>
+                      <div className="text-gray-700 text-sm whitespace-pre-line">
+                        {typeof llmComparison.best_response.advice === 'object' 
+                          ? JSON.stringify(llmComparison.best_response.advice, null, 2)
+                          : llmComparison.best_response.advice
+                        }
+                      </div>
+                      <div className="mt-3 flex items-center text-xs text-green-600">
+                        <span className="mr-3">
+                          Confiança: {(llmComparison.best_response.confidence_score * 100).toFixed(1)}%
+                        </span>
+                        <span>
+                          Tempo: {llmComparison.best_response.processing_time.toFixed(2)}s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {dashboardData?.recent_advice && !llmComparison && !generatingAdvice && !redirectingToDashboard && (
+                  <div className="space-y-3">
+                    {dashboardData.recent_advice.slice(0, 3).map((advice, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-700">
+                          {typeof advice.advice === 'string' ? advice.advice : advice.advice?.advice || 'Conselho não disponível'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {new Date(advice.created_at).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!dashboardData?.recent_advice && !llmComparison && !generatingAdvice && !redirectingToDashboard && (
+                  <div className="text-center py-8">
+                    <Brain className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500">
                       Nenhum conselho gerado ainda. Clique em "Gerar Novo" para começar.
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Advice Tab */}
-        {activeTab === 'advice' && (
+        {/* History Tab */}
+        {activeTab === 'history' && (
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-md">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold text-gray-800">
-                  Conselhos Financeiros Personalizados
+                  Histórico de Análises
                 </h2>
                 <button
-                  onClick={generateFinancialAdvice}
-                  disabled={generatingAdvice}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                  onClick={fetchAnalysisHistory}
+                  disabled={loadingHistory}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
                 >
-                  <Brain className="h-5 w-5 mr-2" />
-                  {generatingAdvice ? 'Analisando...' : 'Gerar Conselhos'}
+                  <History className="h-4 w-4 mr-2" />
+                  {loadingHistory ? 'Carregando...' : 'Atualizar'}
                 </button>
               </div>
 
-              {generatingAdvice && (
+              {loadingHistory && (
                 <div className="text-center py-12">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                   <p className="text-gray-600">
-                    Nossa IA está analisando seus dados financeiros...
+                    Carregando histórico de análises...
                   </p>
                 </div>
               )}
 
-              {llmComparison?.best_response && (
+              {!loadingHistory && analysisHistory && analysisHistory.total_analyses > 0 && (
                 <div className="space-y-4">
-                  <div className="bg-green-50 border border-green-200 p-6 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-800 mb-3">
-                      Melhor Conselho - {llmComparison.best_response.llm_name}
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-2">
+                      Resumo do Histórico
                     </h3>
-                    <div className="text-gray-700 whitespace-pre-line">
-                      {typeof llmComparison.best_response.advice === 'object' 
-                        ? JSON.stringify(llmComparison.best_response.advice, null, 2)
-                        : llmComparison.best_response.advice
-                      }
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-blue-700">Total de Análises:</span>
+                        <span className="ml-2 font-medium">{analysisHistory.total_analyses}</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-700">Última Análise:</span>
+                        <span className="ml-2 font-medium">
+                          {analysisHistory.latest_analysis ? formatDate(analysisHistory.latest_analysis.timestamp) : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-blue-700">Modelo Mais Usado:</span>
+                        <span className="ml-2 font-medium">
+                          {analysisHistory.latest_analysis?.modelo_ia || 'N/A'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-4 flex items-center text-sm text-green-600">
-                      <span className="mr-4">
-                        Confiança: {(llmComparison.best_response.confidence_score * 100).toFixed(1)}%
-                      </span>
-                      <span>
-                        Tempo: {llmComparison.best_response.processing_time.toFixed(2)}s
-                      </span>
-                    </div>
+                  </div>
+
+                  {/* Lista de Análises */}
+                  <div className="space-y-3">
+                    {analysisHistory.all_analyses?.map((analysis, index) => (
+                      <div 
+                        key={analysis.id || index} 
+                        className={`border p-4 rounded-lg ${
+                          index === 0 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-white border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center mb-2">
+                              {index === 0 && <Star className="h-4 w-4 text-yellow-500 mr-2" />}
+                              <h4 className={`font-semibold ${
+                                index === 0 ? 'text-green-800' : 'text-gray-800'
+                              }`}>
+                                Análise #{analysisHistory.total_analyses - index}
+                                {index === 0 && ' (Mais Recente)'}
+                              </h4>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3 text-sm">
+                              <div className="flex items-center text-gray-600">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                <span>
+                                  <strong>Data:</strong> {formatDate(analysis.timestamp)}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center text-gray-600">
+                                <Brain className="h-3 w-3 mr-1" />
+                                <span>
+                                  <strong>Modelo:</strong> {analysis.modelo_ia || 'N/A'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center text-gray-600">
+                                <TrendingUp className="h-3 w-3 mr-1" />
+                                <span>
+                                  <strong>Score:</strong> {
+                                    analysis.advice_response?.overall_assessment?.health_score 
+                                      ? `${analysis.advice_response.overall_assessment.health_score}/10`
+                                      : 'N/A'
+                                  }
+                                </span>
+                              </div>
+
+                              <div className="flex items-center text-gray-600">
+                                <FileText className="h-3 w-3 mr-1" />
+                                <span>
+                                  <strong>Status:</strong> {
+                                    analysis.advice_response && analysis.dashboard_response 
+                                      ? '✅ Completo' 
+                                      : '⚠️ Parcial'
+                                  }
+                                </span>
+                              </div>
+                            </div>
+
+                            {analysis.advice_response?.resumo && (
+                              <div className="mb-3">
+                                <p className="text-sm text-gray-700">
+                                  <strong>Resumo:</strong> {
+                                    typeof analysis.advice_response.resumo === 'string' 
+                                      ? analysis.advice_response.resumo.substring(0, 150) + '...'
+                                      : 'Resumo não disponível'
+                                  }
+                                </p>
+                              </div>
+                            )}
+
+                            {analysis.quality_metrics?.performance_metrics && (
+                              <div className="flex items-center text-xs text-gray-500">
+                                <span>
+                                  Operações executadas: {analysis.quality_metrics.performance_metrics.successful_operations || 0}/3
+                                </span>
+                                <span className="mx-2">•</span>
+                                <span>
+                                  Taxa de sucesso: {
+                                    analysis.quality_metrics.performance_metrics.completion_rate ? '100%' : 'Parcial'
+                                  }
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="ml-4 flex flex-col space-y-2">
+                            <button
+                              onClick={() => openDashboardFromHistory(analysis.id)}
+                              disabled={!analysis.advice_response || !analysis.dashboard_response}
+                              className={`px-3 py-1 rounded text-sm font-medium flex items-center ${
+                                analysis.advice_response && analysis.dashboard_response
+                                  ? index === 0 
+                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Dashboard
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {!llmComparison && !generatingAdvice && (
+              {!loadingHistory && analysisHistory && analysisHistory.total_analyses === 0 && (
                 <div className="text-center py-12">
-                  <Brain className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <History className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500 text-lg">
-                    Clique em "Gerar Conselhos" para receber análises personalizadas
+                    Nenhuma análise encontrada no histórico.
+                  </p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Execute uma análise financeira para ver o histórico aqui.
+                  </p>
+                </div>
+              )}
+
+              {!loadingHistory && !analysisHistory && (
+                <div className="text-center py-12">
+                  <History className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">
+                    Clique em "Atualizar" para carregar o histórico de análises
                   </p>
                 </div>
               )}

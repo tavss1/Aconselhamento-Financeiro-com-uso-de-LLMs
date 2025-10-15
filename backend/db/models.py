@@ -19,19 +19,13 @@ class Usuario(Base):
     # Relacionamentos
     perfil_financeiro = relationship("FinancialProfile", back_populates="usuario")
 
-# TODO: Verificar qual o caminho o usuário pode seguir p solicitar requisição
-# É necessário que seja feito 2/3 dos pontos para que seja feito a requisição (?):
-#     * Questionario - Necessário! (?)
-#     * Objetivo - Pode ser null - ou ser mascarado como "não informado"
-#     * Extrato - Necessário!
-
 class FinancialProfile(Base):
     __tablename__ = "perfil_financeiro"
     
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     questionnaire_data = Column(Text, nullable=False)  # JSON com respostas do questionário
-    objetivo = Column(Text, nullable=True)  # JSON com objetivo - *verificar 
+    objetivo = Column(Text, nullable=True)  # JSON com objetivo financeiro
     extrato = Column(Text, nullable=False)  # JSON com extrato bancário
     data_criado = Column(DateTime, default=datetime.utcnow)
     
@@ -45,9 +39,11 @@ class LLMResponse(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     # Pela Arq de Software, a resposta das LLMs tem que buscar o perfil financeiro do usuario
-    perfil_financeiro_id = Column(Integer, ForeignKey("perfil_financeiro.id"), nullable=False) 
-    llm_responses = Column(Text, nullable=False)  # JSON com todas as respostas dos LLMs
-    default_response = Column(Text, nullable=False)  # JSON com a melhor resposta
+    perfil_financeiro_id = Column(Integer, ForeignKey("perfil_financeiro.id"), nullable=False)
+    modelo_ia = Column(String(100), nullable=False)  # Nome do modelo de IA utilizado 
+    transactions_response = Column(Text, nullable=False)  # JSON com a extração e categorização das transações
+    advice_response = Column(Text, nullable=False)  # JSON com o conselho da LLM
+    dashboard_response = Column(Text, nullable=False)  # JSON com o dashboard gerado
     score = Column(Text, nullable=False)  # JSON com métricas de comparação
     data_criado = Column(DateTime, default=datetime.utcnow)
     

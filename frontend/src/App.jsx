@@ -4,12 +4,15 @@ import { useAuth } from './context/AuthContext';
 import { LoginForm } from './components/Auth/LoginForm';
 import { SetupWizard } from './components/Wizard/setupWizard';
 import { LoadingSpinner } from './components/Components/loadingSpinner';
+import { dashboardService } from './services/dashboardService';
 import Dashboard from './pages/Dashboard';
 
 const AppContent = () => {
   const { isAuthenticated, loading, user, token, logout } = useAuth();
   const [currentView, setCurrentView] = useState('wizard'); // 'wizard' | 'dashboard'
   const [userHasProfile, setUserHasProfile] = useState(false);
+  const [checkingAnalysis, setCheckingAnalysis] = useState(false);
+  const [autoRedirected, setAutoRedirected] = useState(false);
 
   // Log de debug
   console.log('🏠 App - Estado de autenticação:', {
@@ -19,35 +22,49 @@ const AppContent = () => {
     hasToken: !!token
   });
 
-  // Verificar se o usuário já tem perfil completo
+  // Verificar se o usuário já tem perfil completo e análise
   useEffect(() => {
-    if (isAuthenticated) {
-      // Aqui você pode verificar se o usuário já tem perfil completo
-      // Por exemplo, fazendo uma chamada para a API
-      const checkUserProfile = async () => {
-        try {
-          const token = localStorage.getItem('access_token');
-          if (token) {
-            // Fazer chamada para verificar perfil
-            // Por enquanto, vamos deixar como false para sempre mostrar o wizard primeiro
-            setUserHasProfile(false);
-          }
-        } catch (error) {
-          console.error('Erro ao verificar perfil do usuário:', error);
-          setUserHasProfile(false);
-        }
-      };
-      
-      checkUserProfile();
+    if (isAuthenticated()) {
+      checkUserAnalysisStatus();
     }
   }, [isAuthenticated]);
 
-  if (loading) {
+  const checkUserAnalysisStatus = async () => {
+    setCheckingAnalysis(true);
+    try {
+      const analysisStatus = await dashboardService.checkAnalysisStatus();
+      
+      console.log('📊 Status da análise do usuário:', analysisStatus);
+      
+      if (analysisStatus.has_analysis && analysisStatus.should_redirect_to === 'dashboard') {
+        console.log('✅ Usuário possui análise concluída, redirecionando para dashboard');
+        setCurrentView('dashboard');
+        setUserHasProfile(true);
+        setAutoRedirected(true);
+        
+        // Remover a notificação após alguns segundos
+        setTimeout(() => setAutoRedirected(false), 5000);
+      } else {
+        console.log('📝 Usuário precisa completar perfil/análise, mantendo no wizard');
+        setCurrentView('wizard');
+        setUserHasProfile(false);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar status de análise:', error);
+      // Em caso de erro, manter no wizard por segurança
+      setCurrentView('wizard');
+      setUserHasProfile(false);
+    } finally {
+      setCheckingAnalysis(false);
+    }
+  };
+
+  if (loading || checkingAnalysis) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <LoadingSpinner size="large" />
         <div className="ml-4 text-sm text-gray-600">
-          Verificando autenticação...
+          {loading ? 'Verificando autenticação...' : 'Verificando análise financeira...'}
         </div>
       </div>
     );
@@ -56,9 +73,12 @@ const AppContent = () => {
   // Debug info (remover em produção)
   const debugInfo = {
     loading,
+    checkingAnalysis,
     authenticated: isAuthenticated(),
     hasUser: !!user,
     hasToken: !!token,
+    currentView,
+    userHasProfile,
     tokenFromStorage: !!localStorage.getItem('access_token'),
     userFromStorage: !!localStorage.getItem('user')
   };
@@ -96,9 +116,28 @@ const AppContent = () => {
         <SetupWizard 
           onComplete={handleWizardComplete}
           onViewDashboard={handleViewDashboard}
+          onBackToWizard={handleBackToWizard}
         />
       ) : (
         <div>
+          {/* Notificação de redirecionamento automático */}
+          {autoRedirected && (
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700">
+                    Bem-vindo de volta! Você foi redirecionado automaticamente para seu dashboard com análise financeira concluída.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Header simples para navegação */}
           <div className="bg-white shadow-sm border-b">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -107,12 +146,6 @@ const AppContent = () => {
                   Aconselhamento Financeiro
                 </h1>
                 <div className="flex space-x-4">
-                  <button
-                    onClick={handleBackToWizard}
-                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Configurações
-                  </button>
                   <button
                     onClick={() => {
                       logout();
@@ -126,7 +159,7 @@ const AppContent = () => {
               </div>
             </div>
           </div>
-          <Dashboard />
+          <Dashboard onBackToHome={handleBackToWizard} />
         </div>
       )}
     </div>

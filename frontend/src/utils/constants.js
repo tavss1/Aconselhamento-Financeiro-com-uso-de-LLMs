@@ -32,16 +32,13 @@ export const DEPENDENTES = [
 
 export const FINANCIAL_GOALS = [
   { value: 'reserva de emergencia', label: 'Reserva de Emergência' },
-  { value: 'comprar casa', label: 'Comprar Casa Própria' },
-  { value: 'aposentadoria', label: 'Aposentadoria' },
-  { value: 'educacao', label: 'Educação dos Filhos' },
-  { value: 'viagem', label: 'Viagens' },
+  { value: 'viagem', label: 'Planejar Viagem' },
   { value: 'investimento', label: 'Crescimento Patrimonial' },
-  //{ value: 'nenhum objetivo', label: 'Outros' }
+  { value: 'quitar dívida', label: 'Quitar Dívida' }
 ];
 
 export const NAVIGATION_TABS = [
-  { id: 'overview', label: 'Visão Geral', icon: 'TrendingUp' },
-  { id: 'advice', label: 'Conselhos IA', icon: 'Brain' },
+  { id: 'overview', label: 'Aconselhamento', icon: 'TrendingUp' },
+  { id: 'advice', label: 'Histórico', icon: 'Brain' },
   { id: 'comparison', label: 'Comparação LLMs', icon: 'FileText' }
 ];
