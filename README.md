@@ -13,7 +13,7 @@ Sistema fullstack acadêmico para Trabalho de Conclusão de Curso (TCC) em Ciên
 
 ### **Fluxo de Dados Implementado**
 ```
-Upload de Extrato → Questionário Financeiro → CrewAI Pipeline → Dashboard Analítico
+Questionário Financeiro -> Upload de Extrato → CrewAI Pipeline → Dashboard Analítico
 ```
 
 ## 🚀 Funcionalidades Reais Implementadas
@@ -212,8 +212,8 @@ backend/uploads/
 
 ```mermaid
 graph TD
-    A[Upload de Extrato] --> B[Validação de Formato]
-    B --> C[Categorização via LLM]
+    A[Questionario Financeiro] --> B[Upload de Extrato]
+    B --> C[Perfil Financeiro consolidado]
     C --> D[Análise Multi-Agente CrewAI]
     D --> E[Comparação de LLMs]
     E --> F[Compilação Dashboard]
