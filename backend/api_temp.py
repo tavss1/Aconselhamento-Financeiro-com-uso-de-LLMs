@@ -34,7 +34,7 @@ from schemas.financial import FinancialProfileCreate, FinancialProfileResponse, 
 from schemas.llm import LLMComparisonResponse, LLMResponse as LLMResponseSchema
 from middleware.auth import hash_password, verify_password, create_access_token, get_current_user_id
 
-# Configuração CrewAI
+# Configuração LLM 
 os.environ["OPENAI_API_KEY"] = "dummy"
 os.environ["CREWAI_LLM_PROVIDER"] = "ollama"
 os.environ["CREWAI_USE_LOCAL_LLM_ONLY"] = "true"
@@ -46,7 +46,7 @@ llm = LLM(
 )
 
 app = FastAPI(
-    title="Financial Planning AI API - CrewAI Integration",
+    title="Aconselhamento Financeiro com LLMs API - CrewAI Integration",
     description="API com integração completa do sistema de agentes CrewAI para análise financeira",
     version="1.0.0"
 )
@@ -65,15 +65,15 @@ app.add_middleware(
 # CLASSES CREWAI INTEGRADAS
 # ============================================================================
 
-class StandaloneUserProfileBuilderToolSchema(BaseModel):
+class UserProfileBuilderToolSchema(BaseModel):
     user_data_json: Any = Field(description="JSON string OU objeto dict com dados do usuário")
 
-class StandaloneUserProfileBuilderTool(BaseTool):
+class UserProfileBuilderTool(BaseTool):
     """Ferramenta para construir perfil financeiro a partir de dados diretos."""
     
-    name: str = "StandaloneUserProfileBuilder"
+    name: str = "UserProfileBuilder"
     description: str = "Constrói perfil financeiro normalizado a partir de dados do usuário"
-    args_schema = StandaloneUserProfileBuilderToolSchema
+    args_schema = UserProfileBuilderToolSchema
 
     def _run(self, user_data_json: Any) -> str:
         """Constrói perfil financeiro."""
@@ -83,21 +83,45 @@ class StandaloneUserProfileBuilderTool(BaseTool):
             else:
                 user_data = json.loads(user_data_json)
             
-            # Processar dados
+            # Processar dados conforme estrutura do frontend
             dependents = user_data.get("dependents", [])
-            total_dependents = len(dependents) if isinstance(dependents, list) else 0
+            # Calcular total de dependentes baseado na estrutura [{"type": "nenhum", "quantity": 0}]
+            total_dependents = 0
+            if isinstance(dependents, list) and len(dependents) > 0:
+                for dep in dependents:
+                    if isinstance(dep, dict) and dep.get("type") != "nenhum":
+                        total_dependents += int(dep.get("quantity", 0))
             
-            idade = int(user_data.get("age", 30))
-            renda = float(user_data.get("monthly_income", 5000))
-            risk_profile = user_data.get("risk_profile", "moderado")
+            # Validar e converter dados obrigatórios (sem valores padrão)
+            if not user_data.get("age"):
+                raise ValueError("Idade é obrigatória")
+            idade = int(user_data.get("age"))
             
-            financial_goal = user_data.get("financial_goal", "Reserva de emergência")
-            target_amount = float(user_data.get("target_amount", 1200))
-            time_frame = user_data.get("time_frame", "1 ano")
+            if not user_data.get("monthly_income") or float(user_data.get("monthly_income")) <= 0:
+                raise ValueError("Renda mensal é obrigatória e deve ser maior que zero")
+            renda = float(user_data.get("monthly_income"))
             
-            estimated_expenses = renda * 0.7
-            savings_capacity = renda - estimated_expenses
-            debt_to_income = user_data.get("debt_to_income_ratio", 0.2)
+            if not user_data.get("risk_profile"):
+                raise ValueError("Perfil de risco é obrigatório")
+            risk_profile = user_data.get("risk_profile")
+            
+            transportation_methods = user_data.get("transportation_methods", "")
+            
+            if not user_data.get("financial_goal"):
+                raise ValueError("Objetivo financeiro é obrigatório")
+            financial_goal = user_data.get("financial_goal")
+            
+            if not user_data.get("target_amount") or float(user_data.get("target_amount")) <= 0:
+                raise ValueError("Valor objetivo é obrigatório e deve ser maior que zero")
+            target_amount = float(user_data.get("target_amount"))
+            
+            if not user_data.get("time_frame"):
+                raise ValueError("Prazo para objetivo é obrigatório")
+            time_frame = user_data.get("time_frame")
+            
+            # Cálculos financeiros
+            if not user_data.get("user_id"):
+                raise ValueError("ID do usuário é obrigatório")
             
             perfil = {
                 "ok": True,
@@ -110,18 +134,13 @@ class StandaloneUserProfileBuilderTool(BaseTool):
                     "total_dependentes": total_dependents,
                     "detalhes_dependentes": dependents,
                     "risk_profile": risk_profile,
-                    "transportation_methods": user_data.get("transportation_methods", ""),
+                    "transportation_methods": transportation_methods,
                 },
-                "capacidade_poupanca": savings_capacity,
-                "debt_to_income": debt_to_income,
-                "savings_rate": (savings_capacity / renda * 100) if renda > 0 else 0,
                 "objetivo": {
                     "descricao": financial_goal,
                     "valor_objetivo": target_amount,
                     "prazo": time_frame,
-                    "meses_estimados_pelo_fluxo": int(target_amount / savings_capacity) if savings_capacity > 0 else 999
                 },
-                "classificacao_risco": self._classify_risk(debt_to_income, savings_capacity, idade)
             }
             
             return json.dumps(perfil, ensure_ascii=False)
@@ -129,40 +148,6 @@ class StandaloneUserProfileBuilderTool(BaseTool):
         except Exception as e:
             return json.dumps({"ok": False, "error": f"Erro ao construir perfil: {str(e)}"})
     
-    def _classify_risk(self, debt_ratio: float, savings: float, age: int) -> str:
-        """Classifica perfil de risco financeiro."""
-        risk_score = 0
-        
-        if debt_ratio < 0.2:
-            risk_score += 4
-        elif debt_ratio < 0.3:
-            risk_score += 3
-        elif debt_ratio < 0.5:
-            risk_score += 2
-        else:
-            risk_score += 1
-            
-        if savings > 2000:
-            risk_score += 3
-        elif savings > 1000:
-            risk_score += 2
-        elif savings > 0:
-            risk_score += 1
-            
-        if age < 30:
-            risk_score += 2
-        elif age < 50:
-            risk_score += 3
-        else:
-            risk_score += 1
-            
-        if risk_score >= 8:
-            return "Baixo Risco"
-        elif risk_score >= 6:
-            return "Risco Moderado" 
-        else:
-            return "Alto Risco"
-
 class FinancialAdvisorCrew:
     """Crew de aconselhamento financeiro para API integrada."""
     
@@ -173,7 +158,7 @@ class FinancialAdvisorCrew:
     def create_data_extractor_agent(self) -> Agent:
         """Cria agente extrator de dados financeiros."""
         return Agent(
-            role="Analista Financeiro de Transações",
+            role="Extrator Financeiro de Transações",
             goal="Extrair e categorizar transações financeiras de extratos bancários CSV, identificando padrões de gastos e oportunidades de economia.",
             backstory=(
                 "Você é um especialista em finanças pessoais e tem como missão identificar padrões "
@@ -248,49 +233,92 @@ class FinancialAdvisorCrew:
             objetivo_valor = 0
             objetivo_prazo = "Não definido"
 
-        preview_tx = transactions_json[:180] + "..." if transactions_json else "[Será obtido do contexto anterior]"
+        # Escapar aspas duplas no profile_json para evitar problemas de formatação
+        escaped_profile_json = profile_json.replace('"', '\\"')
+        
         description = f"""
             GERAR CONSELHOS FINANCEIROS PERSONALIZADOS
 
             OBJETIVO PRINCIPAL: {objetivo_desc} | META: R$ {objetivo_valor:,.2f} | PRAZO: {objetivo_prazo}
 
-            Você é um consultor financeiro especializado em fornecer conselhos personalizados com base no perfil financeiro e nas transações categorizadas do usuário. 
-            Gere um aconselhamento financeiro detalhado com base no perfil do usuário e nas transações categorizadas.
-            O perfil descreve metas, renda, hábitos e objetivos. As transações categorizadas virão do contexto anterior.
+            Você é um consultor financeiro especializado. Sua tarefa é usar a ferramenta FinancialAdvisorTool 
+            para gerar conselhos personalizados com base no perfil do usuário e nas transações categorizadas 
+            obtidas da tarefa anterior.
 
-            Perfil (resumo):
-            {profile_json[:180]}...
-
-            Transações:
-            {preview_tx}
+            IMPORTANTE: Use EXATAMENTE este formato para invocar a ferramenta com os dados da tarefa anterior:
 
             Action: FinancialAdvisorTool
             Action Input: {{
-                "profile_json": {{ ... }},
-                "transactions_json": {{ ... }},
+                "profile_json": "{escaped_profile_json}",
+                "transactions_json": "{{{{context[extract_task]}}}}",
                 "model": "gemma3"
             }}
 
-            Use a ferramenta FinancialAdvisorTool para formatar a resposta final em JSON:
-            {{
-            "resumo": "...",
-            "alertas": ["..."],
-            "plano": {{
-                "agora": ["..."],
-                "30_dias": ["..."],
-                "12_meses": ["..."]
-            }},
-            "metas_mensuraveis": [
-                {{"meta": "...", "kpi": "...", "meta_num": 0, "prazo_meses": 12}}
-            ]
+            INSTRUÇÕES CRÍTICAS:
+            1. Substitua "{{context[extract_task]}}" pelo JSON completo da tarefa de extração anterior
+            2. Este JSON DEVE conter "transacoes" (array de transações) e "totais_por_categoria" (resumo)
+            3. Use o perfil fornecido para o campo "profile_json"
+            4. Mantenha o formato JSON válido sem quebras de linha
+
+            A resposta deve ser um JSON estruturado com:
+            - resumo: análise da situação financeira
+            - alertas: avisos importantes
+            - plano: ações para agora, 30 dias e 12 meses
+            - metas_mensuraveis: objetivos quantificáveis
+
+            ATENÇÃO: É OBRIGATÓRIO usar o JSON completo da extração anterior que contém 
+            tanto as transações individuais quanto o resumo por categoria.
+        """
+        return Task(
+            description=description,
+            expected_output="JSON válido contendo campos: resumo, alertas, plano, metas_mensuraveis.",
+            agent=agent,
+            tools=[FinancialAdvisorTool()],
+            llm=llm,
+            max_iter=1
+        )
+    
+    def create_advice_task_with_data(self, agent: Agent, profile_json: str, transactions_json: str) -> Task:
+        """Cria task de geração de conselhos com dados explícitos."""
+        try:
+            profile_data = json.loads(profile_json)
+            objetivo = profile_data.get("objetivo", {})
+            objetivo_desc = objetivo.get("descricao", "Não definido")
+            objetivo_valor = objetivo.get("valor_objetivo", 0)
+            objetivo_prazo = objetivo.get("prazo", "Não definido")
+        except Exception:
+            objetivo_desc = "Não definido"
+            objetivo_valor = 0
+            objetivo_prazo = "Não definido"
+
+        # Escapar aspas duplas nos JSONs
+        escaped_profile_json = profile_json.replace('"', '\\"')
+        escaped_transactions_json = transactions_json.replace('"', '\\"')
+        
+        description = f"""
+            GERAR CONSELHOS FINANCEIROS PERSONALIZADOS
+
+            OBJETIVO PRINCIPAL: {objetivo_desc} | META: R$ {objetivo_valor:,.2f} | PRAZO: {objetivo_prazo}
+
+            Você é um consultor financeiro especializado. Use a ferramenta FinancialAdvisorTool 
+            para gerar conselhos personalizados com os dados fornecidos explicitamente.
+
+            IMPORTANTE: Use EXATAMENTE este formato:
+
+            Action: FinancialAdvisorTool
+            Action Input: {{
+                "profile_json": "{escaped_profile_json}",
+                "transactions_json": "{escaped_transactions_json}",
+                "model": "gemma3"
             }}
 
-            REGRAS IMPORTANTES:
-            NÃO escreva nenhum texto fora do JSON.
-            NUNCA use ações como "Manual Response Generation" ou "Final Answer".
-            A única ação válida é "FinancialAdvisorTool".
-
-            Responda APENAS com JSON válido.
+            Os dados já estão prontos e válidos. Não modifique os JSONs fornecidos.
+            
+            A resposta deve ser um JSON estruturado com:
+            - resumo: análise da situação financeira
+            - alertas: avisos importantes
+            - plano: ações para agora, 30 dias e 12 meses
+            - metas_mensuraveis: objetivos quantificáveis
         """
         return Task(
             description=description,
@@ -313,61 +341,105 @@ class FinancialAdvisorCrew:
     async def run_analysis(self, csv_file_path: str, categorization_method: str = "ollama") -> Dict[str, Any]:
         """Executa análise financeira completa de forma assíncrona."""
         try:
+            print(f"🚀 DEBUG - Iniciando run_analysis com user_data: {self.user_data}")
+            
             # ETAPA 1: Construir perfil
-            profile_tool = StandaloneUserProfileBuilderTool()
+            profile_tool = UserProfileBuilderTool()
             profile_result = profile_tool._run(user_data_json=self.user_data)
+            
+            print(f"🔍 DEBUG - Profile result raw: {profile_result}")
+            
             profile_data = json.loads(profile_result)
             if not profile_data.get("ok"):
                 raise Exception(f"Erro ao construir perfil: {profile_data.get('error')}")
 
-            # ETAPA 2 e 3: Pipeline CrewAI
+            print(f"✅ DEBUG - Perfil construído com sucesso: {json.dumps(profile_data, ensure_ascii=False, indent=2)}")
+
+            # ETAPA 2: Pipeline CrewAI em etapas separadas para controle de dados
             data_extractor = self.create_data_extractor_agent()
             financial_advisor = self.create_financial_advisor_agent()
 
+            # Executar extract_task primeiro isoladamente
             extract_task = self.create_extract_task(
                 agent=data_extractor,
                 csv_file_path=csv_file_path,
                 categorization_method=categorization_method
             )
 
-            profile_min = json.dumps(profile_data, ensure_ascii=False, separators=(",", ":"))
-            advice_task = self.create_advice_task(
-                agent=financial_advisor,
-                profile_json=profile_min,
-                transactions_json=None
-            )
+            print(f"🚀 DEBUG - Executando extract_task...")
             
-            advice_task.context = [extract_task]
-
-            # Criar e executar crew
-            crew_pipeline = Crew(
-                agents=[data_extractor, financial_advisor],
-                tasks=[extract_task, advice_task],
+            # Executar apenas extract_task
+            extract_crew = Crew(
+                agents=[data_extractor],
+                tasks=[extract_task],
                 process=Process.sequential,
                 llm=llm,
-                memory=True,
-                shared_memory=True,
+                memory=False,
                 verbose=True
             )
-
-            pipeline_result = crew_pipeline.kickoff()
-
-            # Processar resultados
-            extract_result = extract_task.output.raw if hasattr(extract_task, 'output') else "{}"
-            advice_result = advice_task.output.raw if hasattr(advice_task, 'output') else "{}"
-
-            extract_result_clean = self._clean_json_text(extract_result)
-            advice_result_clean = self._clean_json_text(advice_result)
-
+            
+            extract_result_raw = extract_crew.kickoff()
+            extract_result_clean = self._clean_json_text(extract_task.output.raw if hasattr(extract_task, 'output') else str(extract_result_raw))
+            
+            print(f"🔍 DEBUG - Extract result clean: {extract_result_clean[:300]}...")
+            
+            # Parse dos dados de extração
             try:
                 extract_data = json.loads(extract_result_clean)
-            except json.JSONDecodeError:
-                extract_data = {"ok": False, "error": "Falha ao extrair dados"}
+                print(f"✅ DEBUG - Extract data parsed successfully")
+                print(f"🔍 DEBUG - Transações encontradas: {len(extract_data.get('transacoes', []))}")
+                print(f"🔍 DEBUG - Categorias encontradas: {len(extract_data.get('totais_por_categoria', []))}")
+                
+                # Validar se temos dados necessários
+                if not extract_data.get("ok"):
+                    raise Exception(f"Erro na extração: {extract_data.get('error')}")
+                    
+                if not extract_data.get("transacoes"):
+                    raise Exception("Nenhuma transação extraída")
+                    
+                if not extract_data.get("totais_por_categoria"):
+                    print("⚠️ WARNING - Nenhuma categoria encontrada nos totais")
+                
+            except json.JSONDecodeError as e:
+                print(f"❌ DEBUG - Extract JSON decode error: {e}")
+                extract_data = {"ok": False, "error": "Falha ao extrair dados", "raw_data": extract_result_clean[:500]}
+
+            # ETAPA 3: Executar advice_task com dados explícitos
+            print(f"� DEBUG - Executando advice_task com dados explícitos...")
+            
+            profile_min = json.dumps(profile_data, ensure_ascii=False, separators=(",", ":"))
+            extract_data_str = json.dumps(extract_data, ensure_ascii=False, separators=(",", ":"))
+            
+            advice_task = self.create_advice_task_with_data(
+                agent=financial_advisor,
+                profile_json=profile_min,
+                transactions_json=extract_data_str
+            )
+
+            # Executar advice_task
+            advice_crew = Crew(
+                agents=[financial_advisor],
+                tasks=[advice_task],
+                process=Process.sequential,
+                llm=llm,
+                memory=False,
+                verbose=True
+            )
+            
+            advice_result_raw = advice_crew.kickoff()
+            advice_result_clean = self._clean_json_text(advice_task.output.raw if hasattr(advice_task, 'output') else str(advice_result_raw))
+
+            print(f"🔍 DEBUG - Advice result clean: {advice_result_clean[:300]}...")
 
             try:
                 advice_data = json.loads(advice_result_clean)
-            except json.JSONDecodeError:
-                advice_data = {"ok": False, "error": "Falha ao gerar conselhos"}
+                print(f"✅ DEBUG - Advice data parsed successfully")
+                print(f"🔍 DEBUG - Conselhos gerados: {'Sim' if advice_data.get('resumo') else 'Não'}")
+            except json.JSONDecodeError as e:
+                print(f"❌ DEBUG - Advice JSON decode error: {e}")
+                print(f"🔍 DEBUG - Tentando extrair dados parciais do advice_result_clean...")
+                # Tentar extrair dados parciais mesmo com erro
+                advice_data = {"ok": False, "error": "Falha ao gerar conselhos", "raw_data": advice_result_clean[:500]}
 
             # ETAPA 4: Compilar dashboard
             dashboard_tool = DashboardDataCompilerTool()
@@ -424,62 +496,72 @@ def save_llm_response_to_db(
         db: Sessão do banco de dados
     """
     try:
-        # Preparar dados das respostas LLM individuais
-        llm_responses_data = []
+        # Extrair cada tipo de resposta
+        transactions_data = crew_results.get("transactions", {})
+        advice_data = crew_results.get("advice", {})
+        dashboard_data = crew_results.get("dashboard", {})
         
-        # Resposta do BankStatementParser (extração de transações)
-        if crew_results.get("transactions", {}).get("ok"):
-            transactions_response = {
-                "llm_name": "BankStatementParser_Gemma3",
-                "task": "transaction_extraction_categorization",
-                "advice": json.dumps(crew_results["transactions"], ensure_ascii=False),
-                "confidence_score": 0.9,  # Alta confiança para dados estruturados
-                "processing_time": 0.0,  # Tempo será calculado se disponível
-                "timestamp": crew_results.get("timestamp"),
-                "success": True
-            }
-            llm_responses_data.append(transactions_response)
+        # Preparar respostas para cada coluna específica
+        transactions_response = json.dumps(transactions_data, ensure_ascii=False, indent=2)
+        advice_response = json.dumps(advice_data, ensure_ascii=False, indent=2)
+        dashboard_response = json.dumps(dashboard_data, ensure_ascii=False, indent=2)
         
-        # Resposta do FinancialAdvisor (conselhos financeiros)
-        if crew_results.get("advice", {}).get("resumo"):
-            advisor_response = {
-                "llm_name": "FinancialAdvisor_Gemma3",
-                "task": "financial_advice_generation",
-                "advice": json.dumps(crew_results["advice"], ensure_ascii=False),
-                "confidence_score": 0.85,  # Boa confiança para conselhos
-                "processing_time": 0.0,
-                "timestamp": crew_results.get("timestamp"),
-                "success": True
-            }
-            llm_responses_data.append(advisor_response)
-        
-        # Determinar a melhor resposta (priorizar conselhos financeiros)
-        best_response = advisor_response if crew_results.get("advice", {}).get("resumo") else transactions_response
-        
-        # Preparar métricas de comparação
+        # Preparar métricas de qualidade e comparação
         score_metrics = {
             "overall_success": crew_results.get("success", False),
-            "total_agents": 2,
-            "successful_agents": len(llm_responses_data),
-            "profile_completeness": {
-                "has_transactions": bool(crew_results.get("transactions", {}).get("transacoes")),
-                "has_advice": bool(crew_results.get("advice", {}).get("resumo")),
-                "has_dashboard": bool(crew_results.get("dashboard", {}).get("ok"))
-            },
-            "data_quality": {
-                "transaction_count": len(crew_results.get("transactions", {}).get("transacoes", [])),
-                "categories_count": len(crew_results.get("transactions", {}).get("totais_por_categoria", [])),
-                "advice_items": len(crew_results.get("advice", {}).get("plano", {}).get("agora", []))
-            },
             "execution_timestamp": crew_results.get("timestamp"),
-            "llm_model": crew_results.get("metadata", {}).get("llm_model", "ollama/gemma3")
+            "llm_model": crew_results.get("metadata", {}).get("llm_model", "ollama/gemma3"),
+            "data_quality": {
+                "transactions": {
+                    "success": bool(transactions_data.get("ok")),
+                    "transaction_count": len(transactions_data.get("transacoes", [])),
+                    "categories_count": len(transactions_data.get("totais_por_categoria", [])),
+                    "total_amount": sum([cat.get("valor", 0) for cat in transactions_data.get("totais_por_categoria", [])]),
+                    "has_raw_data": bool(transactions_data.get("raw_data"))
+                },
+                "advice": {
+                    "success": bool(advice_data.get("resumo")),
+                    "has_alerts": len(advice_data.get("alertas", [])) > 0,
+                    "action_plans": {
+                        "immediate": len(advice_data.get("plano", {}).get("agora", [])),
+                        "monthly": len(advice_data.get("plano", {}).get("30_dias", [])),
+                        "yearly": len(advice_data.get("plano", {}).get("12_meses", []))
+                    },
+                    "measurable_goals": len(advice_data.get("metas_mensuraveis", [])),
+                    "has_raw_data": bool(advice_data.get("raw_data"))
+                },
+                "dashboard": {
+                    "success": bool(dashboard_data.get("ok")),
+                    "components_count": len(dashboard_data.get("dashboard_data", {}).keys()) if dashboard_data.get("dashboard_data") else 0,
+                    "has_raw_data": bool(dashboard_data.get("raw_data"))
+                }
+            },
+            "performance_metrics": {
+                "total_agents_used": 2,
+                "successful_operations": sum([
+                    1 if transactions_data.get("ok") else 0,
+                    1 if advice_data.get("resumo") else 0,
+                    1 if dashboard_data.get("ok") else 0
+                ]),
+                "completion_rate": crew_results.get("success", False),
+                "errors_encountered": {
+                    "transactions_error": transactions_data.get("error"),
+                    "advice_error": advice_data.get("error"),
+                    "dashboard_error": dashboard_data.get("error")
+                }
+            }
         }
         
-        # Criar entrada na tabela llm_responses
+        # Determinar modelo de IA usado
+        modelo_ia = crew_results.get("metadata", {}).get("llm_model", "ollama/gemma3")
+        
+        # Criar entrada na tabela llm_responses com a nova estrutura
         llm_response_entry = LLMResponse(
             perfil_financeiro_id=profile_id,
-            llm_responses=json.dumps(llm_responses_data, ensure_ascii=False, indent=2),
-            default_response=json.dumps(best_response, ensure_ascii=False, indent=2),
+            modelo_ia=modelo_ia,
+            transactions_response=transactions_response,
+            advice_response=advice_response,
+            dashboard_response=dashboard_response,
             score=json.dumps(score_metrics, ensure_ascii=False, indent=2)
         )
         
@@ -487,7 +569,19 @@ def save_llm_response_to_db(
         db.commit()
         db.refresh(llm_response_entry)
         
-        print(f"✅ LLM Response salva no banco: ID {llm_response_entry.id}")
+        print(f"✅ LLM Response salva no banco com nova estrutura: ID {llm_response_entry.id}")
+        print(f"📊 Modelo IA: {modelo_ia}")
+        print(f"📈 Transações: {len(transactions_data.get('transacoes', []))} registros")
+        print(f"💡 Conselhos: {'✅' if advice_data.get('resumo') else '❌'}")
+        print(f"📋 Dashboard: {'✅' if dashboard_data.get('ok') else '❌'}")
+        
+        # Debug adicional quando há problemas
+        if not transactions_data.get("ok"):
+            print(f"⚠️ Erro nas transações: {transactions_data.get('error', 'Desconhecido')}")
+        if not advice_data.get("resumo"):
+            print(f"⚠️ Erro nos conselhos: {advice_data.get('error', 'Desconhecido')}")
+        if not dashboard_data.get("ok"):
+            print(f"⚠️ Erro no dashboard: {dashboard_data.get('error', 'Desconhecido')}")
         
     except Exception as e:
         print(f"❌ Erro ao salvar LLM Response: {str(e)}")
@@ -500,7 +594,6 @@ def save_llm_response_to_db(
 
 class FinancialAnalysisRequest(BaseModel):
     """Schema para requisição de análise financeira."""
-    user_data: Dict[str, Any] = Field(description="Dados do perfil financeiro do usuário")
     categorization_method: str = Field(default="ollama", description="Método de categorização")
     
 class FinancialAnalysisResponse(BaseModel):
@@ -683,16 +776,67 @@ async def validate_token(current_user_id: int = Depends(get_current_user_id)):
         "message": "Token válido"
     }
 
+@app.get("/api/auth/check-analysis-status")
+async def check_analysis_status(
+    current_user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Verifica se o usuário possui análise CrewAI concluída"""
+    try:
+        # Buscar perfil do usuário
+        profile = db.query(FinancialProfile).filter(
+            FinancialProfile.usuario_id == current_user_id
+        ).first()
+        
+        if not profile:
+            return {
+                "has_analysis": False,
+                "has_profile": False,
+                "should_redirect_to": "wizard",
+                "message": "Perfil financeiro não encontrado"
+            }
+        
+        # Buscar análise mais recente
+        latest_analysis = db.query(LLMResponse).filter(
+            LLMResponse.perfil_financeiro_id == profile.id
+        ).order_by(LLMResponse.data_criado.desc()).first()
+        
+        if not latest_analysis:
+            return {
+                "has_analysis": False,
+                "has_profile": True,
+                "should_redirect_to": "wizard", 
+                "message": "Nenhuma análise encontrada"
+            }
+        
+        # Verificar se tem dashboard_response preenchido
+        has_dashboard_data = (
+            latest_analysis.dashboard_response and 
+            latest_analysis.dashboard_response.strip() != "" and
+            latest_analysis.dashboard_response != "null"
+        )
+        
+        return {
+            "has_analysis": has_dashboard_data,
+            "has_profile": True,
+            "should_redirect_to": "dashboard" if has_dashboard_data else "wizard",
+            "analysis_date": latest_analysis.data_criado.isoformat() if latest_analysis else None,
+            "message": "Análise encontrada" if has_dashboard_data else "Análise incompleta"
+        }
+        
+    except Exception as e:
+        print(f"Erro ao verificar status de análise: {e}")
+        return {
+            "has_analysis": False,
+            "has_profile": False,
+            "should_redirect_to": "wizard",
+            "message": f"Erro interno: {str(e)}"
+        }
+
 @app.get("/")
 async def root():
     """Endpoint raiz para verificar se a API está funcionando"""
     return {"message": "API de Autenticação funcionando!", "status": "online"}
-
-@app.post("/api/test-json")
-async def test_json(data: dict):
-    """Endpoint de teste para JSON"""
-    print(f"Recebido: {data}")
-    return {"received": data, "message": "JSON recebido com sucesso"}
 
 @app.get("/health")
 async def health_check():
@@ -934,28 +1078,89 @@ async def analyze_financial_data_with_crewai(
                 detail="Arquivo de extrato não encontrado no servidor"
             )
 
-        # Preparar dados do usuário
-        questionnaire_data = json.loads(profile.questionnaire_data)
+        # Preparar dados do usuário conforme estrutura do frontend
+        questionnaire_data = json.loads(profile.questionnaire_data) if profile.questionnaire_data else {}
         objetivo_data = json.loads(profile.objetivo) if profile.objetivo else {}
         
+        print(f"🔍 DEBUG - Questionnaire data: {questionnaire_data}")
+        print(f"🔍 DEBUG - Objetivo data: {objetivo_data}")
+        
+        # Validar dados essenciais
+        if not questionnaire_data:
+            raise HTTPException(
+                status_code=400,
+                detail="Dados do questionário não encontrados. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not objetivo_data:
+            raise HTTPException(
+                status_code=400,
+                detail="Objetivo financeiro não encontrado. Complete seu perfil financeiro primeiro."
+            )
+        
+        # Estrutura exata conforme frontend
         user_data = {
             "user_id": current_user_id,
-            "age": questionnaire_data.get("idade", 25),
-            "monthly_income": questionnaire_data.get("renda_mensal", 3000),
-            "dependents": questionnaire_data.get("dependentes", []),
-            "risk_profile": questionnaire_data.get("perfil_risco", "moderado"),
-            "financial_goal": objetivo_data.get("descricao", "Reserva de emergência"),
-            "target_amount": objetivo_data.get("valor_objetivo", 1000),
-            "time_frame": objetivo_data.get("prazo", "12 meses"),
-            "debt_to_income_ratio": questionnaire_data.get("divida_renda_ratio", 0.3),
-            "liquid_assets": questionnaire_data.get("patrimonio_liquido", 5000),
-            "transportation_methods": questionnaire_data.get("meio_transporte", "Transporte público")
+            "age": questionnaire_data.get("age"),
+            "monthly_income": questionnaire_data.get("monthly_income"),
+            "risk_profile": questionnaire_data.get("risk_profile"),
+            "transportation_methods": questionnaire_data.get("transportation_methods"),
+            "dependents": questionnaire_data.get("dependents"),
+            "financial_goal": objetivo_data.get("financial_goal"),
+            "target_amount": objetivo_data.get("financial_goal_details", {}).get("target_amount"),
+            "time_frame": objetivo_data.get("financial_goal_details", {}).get("time_frame")
         }
+        
+        print(f"🔍 DEBUG - User data preparado: {user_data}")
+        
+        # Validar todos os campos obrigatórios (sem valores padrão)
+        if not user_data.get("age"):
+            raise HTTPException(
+                status_code=400,
+                detail="Idade é obrigatória. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not user_data.get("monthly_income") or float(user_data["monthly_income"]) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Renda mensal deve ser maior que zero. Atualize seu perfil financeiro."
+            )
+        
+        if not user_data.get("risk_profile"):
+            raise HTTPException(
+                status_code=400,
+                detail="Perfil de risco é obrigatório. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not user_data.get("financial_goal"):
+            raise HTTPException(
+                status_code=400,
+                detail="Objetivo financeiro é obrigatório. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not user_data.get("target_amount") or float(user_data["target_amount"]) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Valor objetivo deve ser maior que zero. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not user_data.get("time_frame"):
+            raise HTTPException(
+                status_code=400,
+                detail="Prazo para objetivo é obrigatório. Complete seu perfil financeiro primeiro."
+            )
+        
+        if not user_data.get("age"):
+            raise HTTPException(
+                status_code=400,
+                detail="Idade é obrigatória. Atualize seu perfil financeiro."
+            )
 
         # Criar e executar crew
         crew_system = FinancialAdvisorCrew(user_data)
         
         print(f"🚀 Iniciando análise CrewAI para usuário {current_user_id}")
+        print(f"🔍 DEBUG - User data final enviado para crew: {user_data}")
         
         results = await crew_system.run_analysis(
             csv_file_path=csv_file_path,
@@ -1008,79 +1213,54 @@ async def get_financial_analysis(
                 detail="Perfil financeiro não encontrado. Complete seu perfil primeiro."
             )
         
-        # Verificar se existe análise prévia
-        extrato_data = json.loads(profile.extrato) if profile.extrato else {}
-        analysis_results = extrato_data.get("analysis_results")
+        # Buscar a resposta LLM mais recente para este perfil
+        latest_llm_response = db.query(LLMResponse).filter(
+            LLMResponse.perfil_financeiro_id == profile.id
+        ).order_by(LLMResponse.data_criado.desc()).first()
         
-        if not analysis_results or not analysis_results.get("processed"):
-            # Se não há análise, retornar dados básicos/fallback
-            return {
-                "dashboard": {
-                    "dashboard_data": {
-                        "transactions_analysis": {
-                            "summary": {
-                                "total_transactions": 0,
-                                "total_income": 0,
-                                "total_expenses": 0
-                            },
-                            "categories_breakdown": []
-                        },
-                        "financial_health": {
-                            "score": 50,
-                            "status": "Aguardando análise"
-                        },
-                        "alerts_and_notifications": {
-                            "urgent": ["Execute a análise financeira para obter insights personalizados"],
-                            "info": []
-                        }
-                    }
+        if not latest_llm_response:
+            raise HTTPException(
+                status_code=404,
+                detail="Nenhuma análise financeira encontrada. Execute o processamento CrewAI primeiro usando /api/financial/analyze-with-crewai"
+            )
+        
+        # Extrair dados das colunas da tabela llm_responses
+        try:
+            transactions_data = json.loads(latest_llm_response.transactions_response)
+            advice_data = json.loads(latest_llm_response.advice_response)
+            dashboard_data = json.loads(latest_llm_response.dashboard_response)
+            quality_metrics = json.loads(latest_llm_response.score)
+            
+            # Estruturar resposta completa para o dashboard
+            dashboard_response = {
+                "success": True,
+                "timestamp": latest_llm_response.data_criado.isoformat(),
+                "profile_id": profile.id,
+                "modelo_ia": latest_llm_response.modelo_ia,
+                "data": {
+                    "transactions": transactions_data,
+                    "advice": advice_data,
+                    "dashboard": dashboard_data,
+                    "quality_metrics": quality_metrics
                 },
-                "message": "Análise não executada. Use o endpoint /api/financial/analyze-with-crewai"
+                "summary": {
+                    "total_transactions": len(transactions_data.get("transacoes", [])),
+                    "total_categories": len(transactions_data.get("totais_por_categoria", [])),
+                    "has_advice": bool(advice_data.get("resumo")),
+                    "dashboard_ready": bool(dashboard_data.get("ok")),
+                    "analysis_date": latest_llm_response.data_criado.isoformat()
+                }
             }
-        
-        # Buscar arquivo de análise mais recente
-        analysis_files = [f for f in os.listdir('.') if f.startswith('financial_analysis_') and f.endswith('.json')]
-        
-        if analysis_files:
-            # Pegar o arquivo mais recente
-            latest_file = sorted(analysis_files, reverse=True)[0]
             
-            with open(latest_file, 'r', encoding='utf-8') as f:
-                analysis_data = json.load(f)
-            
-            return {
-                "dashboard": analysis_data.get("dashboard", {}),
-                "timestamp": analysis_data.get("timestamp"),
-                "source": "crewai_analysis",
-                "file": latest_file
-            }
-        else:
-            # Fallback com dados básicos
-            questionnaire_data = json.loads(profile.questionnaire_data) if profile.questionnaire_data else {}
-            
-            return {
-                "dashboard": {
-                    "dashboard_data": {
-                        "transactions_analysis": {
-                            "summary": {
-                                "total_transactions": 0,
-                                "total_income": questionnaire_data.get("renda_mensal", 0),
-                                "total_expenses": questionnaire_data.get("renda_mensal", 0) * 0.7
-                            },
-                            "categories_breakdown": []
-                        },
-                        "financial_health": {
-                            "score": 60,
-                            "status": "Dados preliminares"
-                        },
-                        "alerts_and_notifications": {
-                            "urgent": [],
-                            "info": ["Execute análise completa para dados detalhados"]
-                        }
-                    }
-                },
-                "message": "Dados de fallback. Para análise completa, execute processamento CrewAI"
-            }
+            print(dashboard_response)
+
+            return dashboard_response
+                
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro ao processar dados da análise: {str(e)}"
+            )
 
     except HTTPException:
         raise
@@ -1179,8 +1359,10 @@ async def get_llm_responses(
             response_data = {
                 "id": llm_resp.id,
                 "timestamp": llm_resp.data_criado.isoformat(),
-                "llm_responses": json.loads(llm_resp.llm_responses),
-                "default_response": json.loads(llm_resp.default_response),
+                "modelo_ia": llm_resp.modelo_ia,
+                "transactions_response": json.loads(llm_resp.transactions_response),
+                "advice_response": json.loads(llm_resp.advice_response),
+                "dashboard_response": json.loads(llm_resp.dashboard_response),
                 "score_metrics": json.loads(llm_resp.score)
             }
             responses_data.append(response_data)
@@ -1230,8 +1412,10 @@ async def get_latest_llm_response(
             "has_analysis": True,
             "analysis_id": latest_llm_response.id,
             "timestamp": latest_llm_response.data_criado.isoformat(),
-            "llm_responses": json.loads(latest_llm_response.llm_responses),
-            "best_response": json.loads(latest_llm_response.default_response),
+            "modelo_ia": latest_llm_response.modelo_ia,
+            "transactions_response": json.loads(latest_llm_response.transactions_response),
+            "advice_response": json.loads(latest_llm_response.advice_response),
+            "dashboard_response": json.loads(latest_llm_response.dashboard_response),
             "quality_metrics": json.loads(latest_llm_response.score)
         }
         
@@ -1239,42 +1423,6 @@ async def get_latest_llm_response(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
-
-@app.post("/api/test-crewai")
-async def test_crewai_connection():
-    """Testa a conexão com o sistema CrewAI"""
-    try:
-        # Teste básico das ferramentas
-        test_data = {
-            "user_id": 999,
-            "age": 25,
-            "monthly_income": 3000,
-            "financial_goal": "Teste API",
-            "target_amount": 1000,
-            "time_frame": "6 meses"
-        }
-        
-        profile_tool = StandaloneUserProfileBuilderTool()
-        result = profile_tool._run(user_data_json=test_data)
-        
-        return {
-            "crewai_status": "operational",
-            "llm_model": "ollama/gemma3",
-            "tools_available": ["BankStatementParserTool", "FinancialAdvisorTool", "DashboardDataCompilerTool"],
-            "test_result": json.loads(result),
-            "timestamp": datetime.now().isoformat(),
-            "database_features": {
-                "llm_responses_table": "enabled",
-                "automatic_save": "enabled"
-            }
-        }
-        
-    except Exception as e:
-        return {
-            "crewai_status": "error",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
 
 if __name__ == "__main__":
     import uvicorn

@@ -286,104 +286,7 @@ class DatabaseFinancialProfileTool(BaseTool):
         return json.dumps(error_response, ensure_ascii=False)
 
 # ----------------------------------------------------------------------------
-# 1) UserProfileBuilderTool - usando banco de dados 
-# ----------------------------------------------------------------------------
-
-class UserProfileBuilderArgs(BaseModel):
-    database_profile_json: str = Field(description="JSON string from DatabaseFinancialProfileTool with user data")
-
-class UserProfileBuilderTool(BaseTool):
-    name: str = "UserProfileBuilder"
-    description: str = (
-        "Constrói um perfil financeiro normalizado a partir dos dados do questionário e do questionário obtidos do banco de dados. "
-    )
-
-    def _run(self, database_profile_json: str) -> str:
-        try:
-            db_data = json.loads(database_profile_json)
-            
-            if not db_data.get("ok", False):
-                return json.dumps({"ok": False, "error": "Invalid database profile data"})
-            
-            questionnaire = db_data.get("questionnaire_data", {})
-            objetivo = db_data.get("objetivo_data", {})
-            
-        except Exception as e:
-            return json.dumps({"ok": False, "error": f"Invalid JSON input: {e}"})
-
-        try:
-            # Extrair dados do questionário (adaptado para estrutura React)
-            idade = int(questionnaire.get("age", 0))
-            renda = float(questionnaire.get("monthly_income", 0))
-            dependentes = questionnaire.get("dependents", [])
-            perfil_declarado = questionnaire.get("risk_profile", "")
-            transporte = questionnaire.get("transportation_methods", "")
-            info_dependentes = self._processar_dependentes(dependentes)
-                       
-            # Cálculos de indicadores financeiros
-            # capacidade_poupanca = max(renda - gastos_mensais, 0)
-            # debt_to_income = (dividas_totais / renda) if renda > 0 else 0
-            # savings_rate = (capacidade_poupanca / renda * 100) if renda > 0 else 0
-            
-            # Análise de objetivos
-            objetivo_detalhes = objetivo.get("financial_goal_details", {})
-            objetivo_descricao = objetivo.get("financial_goal", "")
-            objetivo_valor = float(objetivo_detalhes.get("target_amount", 0))
-            objetivo_prazo = objetivo_detalhes.get("time_frame", "")
-            
-            
-            # Perfil final estruturado
-            perfil = {
-                "ok": True,
-                "timestamp": _now_iso(),
-                "profile_id": db_data.get("profile_id"),
-                "usuario_id": db_data.get("usuario_id"),
-                
-                # Informações pessoais
-                "dados_pessoais": {
-                    "idade": idade,
-                    "renda_mensal": renda,
-                    "total_dependentes": info_dependentes.get("total", 0),
-                    "detalhes_dependentes": info_dependentes.get("detalhes", []),
-                    "risk_profile": perfil_declarado,
-                    "transportation_methods": transporte,
-                },
-                # Objetivos financeiros
-                "objetivo": {
-                    "descricao": objetivo_descricao,
-                    "valor_objetivo": objetivo_valor,
-                    "prazo": objetivo_prazo
-                },
-            }
-            
-            return json.dumps(perfil, ensure_ascii=False)
-            
-        except Exception as e:
-            return json.dumps({"ok": False, "error": f"Profile financial error: {str(e)}"})
-    
-    def _processar_dependentes(self, data):
-        """
-        Processa a estrutura de dependentes e retorna informações organizadas
-        """
-        dependentes = data.get("dependents", [])
-        
-        resultado = {
-            "total": 0,
-            "por_tipo": {},
-            "detalhes": []
-        }
-        
-        for dep in dependentes:
-            tipo = dep.get("type")
-            qtd = dep.get("quantity", 0)
-            
-            resultado["total"] += qtd
-            #resultado["por_tipo"][tipo] = resultado["por_tipo"].get(tipo, 0) + qtd
-            resultado["detalhes"].append({"tipo": tipo, "quantidade": qtd})
-        
-        return resultado
-# ----------------------------------------------------------------------------
-# 2) BankStatementParserTool (CSV)
+# 1) BankStatementParserTool (CSV)
 # ----------------------------------------------------------------------------
 
 CATEGORY_MAP = {
@@ -594,8 +497,7 @@ class BankStatementParserTool(BaseTool):
             df_non_expenses = df[df["valor"] >= 0].copy()
             
             if already_categorized == False:
-
-            # Categorizar apenas despesas
+                # Categorizar apenas despesas
                 if categorization_method == "ollama":
                     df_expenses = self._categorize_with_ollama(df_expenses, ollama_model, block_size)
                 else:
@@ -609,49 +511,49 @@ class BankStatementParserTool(BaseTool):
             
                 # Categorizar não-despesas como "Renda" (receitas/transferências recebidas)
                 df_non_expenses["categoria"] = "Renda"
-                
-                # Recombinar DataFrames
-                df_categorized = pd.concat([df_expenses, df_non_expenses], ignore_index=True)
-                df_categorized = df_categorized.sort_values("data").reset_index(drop=True)
-                
-                # Remover coluna "descricao_original" se existir antes de gerar output
-                if "descricao_original" in df_categorized.columns:
-                    df_categorized = df_categorized.drop(columns=["descricao_original"])
-                
-                # NOVO: Remover coluna "Identificador" se existir
-                if "identificador" in df_categorized.columns:
-                    df_categorized = df_categorized.drop(columns=["identificador"])
-                if "Identificador" in df_categorized.columns:
-                    df_categorized = df_categorized.drop(columns=["Identificador"])
-                
-                # Rollups apenas para despesas (categoria != "Renda")
-                df_for_totals = df_categorized[df_categorized["categoria"] != "Renda"]
-                totals = (
-                    df_for_totals.groupby("categoria")["valor"]
-                    .sum()
-                    .reset_index()
-                    .sort_values("valor")
-                )
-                
-                # Adicionar total de receitas separadamente
-                total_renda = df_categorized[df_categorized["categoria"] == "Renda"]["valor"].sum()
-                if total_renda > 0:
-                    totals = pd.concat([
-                        totals,
-                        pd.DataFrame([{"categoria": "Renda", "valor": total_renda}])
-                    ], ignore_index=True)
             
-                summary = {
-                    "ok": True,
-                    "timestamp": _now_iso(),
-                    "method": categorization_method,
-                    "n_transacoes": int(len(df_categorized)),
-                    "n_despesas": int(len(df_expenses)),
-                    "n_receitas": int(len(df_non_expenses)),
-                    "totais_por_categoria": totals.to_dict(orient="records") if pd is not None else [],
-                    "transacoes": df_categorized.to_dict(orient="records") if pd is not None else [],
-                }
-                return json.dumps(summary, ensure_ascii=False)
+            # Recombinar DataFrames (sempre executar)
+            df_categorized = pd.concat([df_expenses, df_non_expenses], ignore_index=True)
+            df_categorized = df_categorized.sort_values("data").reset_index(drop=True)
+            
+            # Remover coluna "descricao_original" se existir antes de gerar output
+            if "descricao_original" in df_categorized.columns:
+                df_categorized = df_categorized.drop(columns=["descricao_original"])
+            
+            # NOVO: Remover coluna "Identificador" se existir
+            if "identificador" in df_categorized.columns:
+                df_categorized = df_categorized.drop(columns=["identificador"])
+            if "Identificador" in df_categorized.columns:
+                df_categorized = df_categorized.drop(columns=["Identificador"])
+            
+            # Rollups apenas para despesas (categoria != "Renda")
+            df_for_totals = df_categorized[df_categorized["categoria"] != "Renda"]
+            totals = (
+                df_for_totals.groupby("categoria")["valor"]
+                .sum()
+                .reset_index()
+                .sort_values("valor")
+            )
+            
+            # Adicionar total de receitas separadamente
+            total_renda = df_categorized[df_categorized["categoria"] == "Renda"]["valor"].sum()
+            if total_renda > 0:
+                totals = pd.concat([
+                    totals,
+                    pd.DataFrame([{"categoria": "Renda", "valor": total_renda}])
+                ], ignore_index=True)
+        
+            summary = {
+                "ok": True,
+                "timestamp": _now_iso(),
+                "method": categorization_method,
+                "n_transacoes": int(len(df_categorized)),
+                "n_despesas": int(len(df_expenses)),
+                "n_receitas": int(len(df_non_expenses)),
+                "totais_por_categoria": totals.to_dict(orient="records") if pd is not None else [],
+                "transacoes": df_categorized.to_dict(orient="records") if pd is not None else [],
+            }
+            return json.dumps(summary, ensure_ascii=False)
         except Exception as e:
             import traceback
             return json.dumps({
@@ -886,7 +788,7 @@ class BankStatementParserTool(BaseTool):
         return df
 
 # ----------------------------------------------------------------------------
-# 3) FinancialAdvisorTool (LLM plans based on profile + transactions)
+# 2) FinancialAdvisorTool (LLM plans based on profile + transactions)
 # ----------------------------------------------------------------------------
 
 from pydantic import BaseModel, Field
@@ -911,17 +813,18 @@ class FinancialAdvisorTool(BaseTool):
     args_schema = FinancialAdvisorToolSchema
 
     SYSTEM_PROMPT: ClassVar[str] = (
-        "⚠️ MODO ESTRITO: RESPOSTA APENAS JSON ⚠️\n"
-        "Você é um consultor financeiro automatizado. Não cumprimente, não explique, não use markdown.\n"
-        "Formato obrigatório:\n"
+        "RETORNE APENAS JSON NO FORMATO EXATO ABAIXO. NÃO ADICIONE TEXTO EXTRA.\n"
         "{\n"
-        "  \"resumo\": \"...\",\n"
-        "  \"alertas\": [\"...\"],\n"
-        "  \"plano\": {\"agora\": [\"...\"], \"30_dias\": [\"...\"], \"12_meses\": [\"...\"]},\n"
-        "  \"metas_mensuraveis\": [{\"meta\": \"...\", \"kpi\": \"...\", \"meta_num\": 0, \"prazo_meses\": 12}]\n"
+        '  "resumo": "Texto analisando situação financeira",\n'
+        '  "alertas": ["Texto alerta 1", "Texto alerta 2"],\n'
+        '  "plano": {\n'
+        '    "agora": ["Ação 1", "Ação 2", "Ação 3"],\n'
+        '    "30_dias": ["Meta 1", "Meta 2", "Meta 3"],\n'
+        '    "12_meses": ["Objetivo 1", "Objetivo 2", "Objetivo 3"]\n'
+        '  },\n'
+        '  "metas_mensuraveis": [{"meta": "Descrição", "kpi": "Indicador", "meta_num": 1000, "prazo_meses": 12}]\n'
         "}\n"
-        "SEMPRE dê 3 recomendações para cada período (agora, 30 dias, 12 meses).\n"
-        "Não adicione nada fora das chaves."
+        "ANÁLISE OS DADOS FINANCEIROS E RESPONDA APENAS JSON:"
     )
 
     def _run(self, profile_json: Any, transactions_json: Any, model: Optional[str] = None) -> str:
@@ -951,6 +854,13 @@ class FinancialAdvisorTool(BaseTool):
         transacoes = tx.get("transacoes", [])
         totais_por_categoria = tx.get("totais_por_categoria", [])
 
+        # --- Filtrar apenas top 5 transações que mais movimentaram (por valor absoluto) ---
+        top_5_transacoes = sorted(
+            transacoes, 
+            key=lambda t: abs(float(t.get("valor", 0))), 
+            reverse=True
+        )[:5]
+
         # --- Cálculo de totais financeiros ---
         total_despesas = sum(
             abs(float(t.get("valor", 0))) for t in transacoes if float(t.get("valor", 0)) < 0
@@ -969,30 +879,57 @@ class FinancialAdvisorTool(BaseTool):
             "total_receitas_calculado": round(total_receitas, 2),
         }
 
-        # --- Montar contexto completo e limpo ---
+        print(f"🔍 DEBUG FinancialAdvisorTool - Perfil consolidado: {json.dumps(perfil_financeiro, ensure_ascii=False, indent=2)}")
+        print(f"🔍 DEBUG FinancialAdvisorTool - Total transações: {len(transacoes)}")
+        print(f"🔍 DEBUG FinancialAdvisorTool - Top 5 transações: {len(top_5_transacoes)}")
+        print(f"🔍 DEBUG FinancialAdvisorTool - Total categorias: {len(totais_por_categoria)}")
+
+        # --- Montar contexto limpo e otimizado para LLM ---
         context = {
             "perfil": perfil_financeiro,
-            "resumo_gastos_por_categoria": totais_por_categoria,
-            "amostra_transacoes": transacoes[:5],  # até 5 para não poluir o prompt
+            "resumo_gastos_por_categoria": totais_por_categoria,  # TODAS as categorias e valores
+            "top_5_transacoes_maiores": [  # APENAS top 5 transações
+                {
+                    "data": t.get("data"),
+                    "descricao": t.get("descricao"),
+                    "valor": t.get("valor"),
+                    "categoria": t.get("categoria")
+                }
+                for t in top_5_transacoes
+            ]
         }
 
-        # --- Gerar prompt ---
+        # --- Gerar prompt simplificado ---
         prompt = (
             self.SYSTEM_PROMPT
-            + "\n\nContexto financeiro do usuário e transações:\n"
-            + json.dumps(context, ensure_ascii=False, indent=2)
+            + "\n\nDADOS:\n"
+            + f"Renda: R$ {perfil_financeiro.get('renda_mensal', 0)}\n"
+            + f"Despesas: R$ {perfil_financeiro.get('total_despesas_calculado', 0)}\n"
+            + f"Objetivo: {perfil_financeiro.get('objetivo', {}).get('descricao', 'N/A')}\n"
+            + f"Meta: R$ {perfil_financeiro.get('objetivo', {}).get('valor_objetivo', 0)}\n"
+            + f"Categorias: {json.dumps(totais_por_categoria[:3], ensure_ascii=False)}\n"
         )
+
+        print(f"🔍 DEBUG FinancialAdvisorTool - Contexto enviado: {json.dumps(context, ensure_ascii=False, indent=2)}")
 
         try:
             raw = client.generate(prompt, model=model).strip()
+            print(f"🔍 DEBUG FinancialAdvisorTool - Resposta raw do LLM: {raw}")
 
-            if not raw:
-                raise JSONableError("Empty response from LLM")
+            if not raw or raw.strip() == "":
+                raise JSONableError("Empty or whitespace-only response from LLM")
             
+            # Tentar extrair JSON da resposta
             if not raw.lstrip().startswith("{"):
+                print(f"🔍 DEBUG - Resposta não começa com '{{', tentando extrair JSON...")
                 raw_json = _extract_json(raw)
             else:
                 raw_json = raw
+
+            print(f"🔍 DEBUG FinancialAdvisorTool - JSON extraído: {raw_json}")
+
+            if not raw_json or raw_json.strip() == "":
+                raise JSONableError("JSON extraction resulted in empty string")
 
             json_data = json.loads(raw_json)
 
@@ -1006,8 +943,8 @@ class FinancialAdvisorTool(BaseTool):
             return json.dumps({
                 "ok": False,
                 "error": f"Erro ao gerar conselho: {e}",
-                "traceback": raw[:400] if 'raw' in locals() else None,
-                "prompt_usado": prompt[:500]  # útil para debug
+                "traceback": str(raw)[:400] if 'raw' in locals() and raw is not None else "No raw response",
+                "prompt_usado": prompt[:500] if 'prompt' in locals() else "No prompt"  # útil para debug
             }, ensure_ascii=False)
         
 # from typing import Any, Optional, Union
@@ -1259,9 +1196,12 @@ class ReportGeneratorTool(BaseTool):
 # Helper: JSON extraction (for LLMs that wrap JSON with text)
 # ----------------------------------------------------------------------------
     
-def _extract_json(self, text: str) -> str:
+def _extract_json(text: str) -> str:
     """Extrai o primeiro bloco JSON válido de uma string, sem usar regex recursivo (compatível com Python)."""
     import json
+    
+    if not text or text.strip() == "":
+        raise ValueError("Texto vazio fornecido para extração de JSON.")
 
     stack = []
     start = None
@@ -1284,24 +1224,7 @@ def _extract_json(self, text: str) -> str:
                         pass
 
     # Se chegar aqui, nenhum JSON válido foi encontrado
-    raise ValueError("Não foi possível extrair JSON da resposta do modelo.")
-
-# def _extract_json(self, text: str) -> str:
-#     """Extrai o primeiro bloco JSON válido de uma string de texto."""
-
-#     try:
-#         # Busca o primeiro trecho entre chaves balanceadas
-#         match = re.search(r'\{(?:[^{}]|(?R))*\}', text, re.DOTALL)
-#         if match:
-#             candidate = match.group(0)
-#             # Valida se é JSON
-#             json.loads(candidate)
-#             return candidate
-#     except Exception:
-#         pass
-
-#     # Se não encontrar nada válido, retorna erro controlado
-#     raise ValueError("Não foi possível extrair JSON da resposta do modelo.")
+    raise ValueError(f"Não foi possível extrair JSON da resposta do modelo. Texto recebido: {text[:200]}...")
 
 # ============================================================================
 # 6) DashboardDataCompilerTool (Estruturação para Frontend React)
