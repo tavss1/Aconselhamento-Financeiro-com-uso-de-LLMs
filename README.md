@@ -123,7 +123,7 @@ cp .env.example .env
 # Editar .env com as configurações
 
 # Executar aplicação
-No terminal com o ambiente virtual ativo, digite uvicorn api_temp:app --host 0.0.0.0 --host 8000 --reload
+No terminal com o ambiente virtual ativo, digite uvicorn api_temp:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### **3. Configuração do Frontend**
