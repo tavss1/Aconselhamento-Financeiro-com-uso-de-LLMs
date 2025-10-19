@@ -25,10 +25,10 @@ Questionário Financeiro -> Upload de Extrato → CrewAI Pipeline → Dashboard 
 - ✅ Banco de dados MySQL com relacionamentos
 
 ### **2. Processamento de Extratos Bancários**
-- ✅ Upload de arquivos CSV/OFX
+- ✅ Upload de arquivos CSV
 - ✅ Categorização automática de transações
 - ✅ Integração com LLMs locais via Ollama
-- ✅ Análise de padrões de gastos
+- ✅ Análise de padrões de gastos via categorias
 
 ### **3. Sistema Multi-Agente CrewAI**
 ```yaml
@@ -75,13 +75,8 @@ Agentes Implementados:
       "transporte": "Valor categorizado",
       "lazer": "Valor categorizado"
     },
-    "recent_advice": "Conselhos personalizados"
+    "advice": "Conselhos personalizados"
   },
-  "llm_comparison": {
-    "best_response": "Melhor conselho gerado",
-    "metrics": "Métricas de comparação",
-    "ranking": "Ranking dos modelos"
-  }
 }
 ```
 
@@ -128,7 +123,7 @@ cp .env.example .env
 # Editar .env com as configurações
 
 # Executar aplicação
-No terminal com o ambiente virtual ativo, digite uvicorn api_temp:app --host 0.0.0.0 --host 8000 --reload
+No terminal com o ambiente virtual ativo, digite uvicorn api_temp:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### **3. Configuração do Frontend**
