@@ -45,8 +45,11 @@ export const LoginForm = () => {
           <h2 className="text-3xl font-bold text-gray-800">
             {isLogin ? 'Entrar' : 'Criar Conta'}
           </h2>
-          <p className="text-gray-600 mt-2">
-            Seu assistente financeiro inteligente
+          <p className="text-gray-600 mt-2 text-center">
+            O assistente financeiro inteligente
+          </p>
+          <p className="text-gray-600 text-center">
+            para estudantes universitários
           </p>
         </div>
 
@@ -115,7 +118,7 @@ export const LoginForm = () => {
             onClick={() => setIsLogin(!isLogin)}
             className="text-blue-600 hover:text-blue-700 font-medium"
           >
-            {isLogin ? 'Não tem conta? Criar uma' : 'Já tem conta? Entrar'}
+            {isLogin ? 'Não possui cadastro? Crie uma conta aqui' : 'Já tem conta? Entrar'}
           </button>
         </div>
       </div>

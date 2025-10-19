@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, LogOut, Brain, FileText, History, Calendar, Star, ExternalLink, Home, ArrowLeft } from 'lucide-react';
+import { DollarSign, TrendingUp, LogOut, Brain, FileText, History, Calendar, Star, ExternalLink, Home, ArrowLeft, Target } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
@@ -85,6 +85,8 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
     setGeneratingAdvice(true);
     try {
       const result = await dashboardService.generateFinancialAdvice(token);
+      console.log('🔍 Resultado da análise financeira:', result);
+      console.log('🔍 Best response advice structure:', result?.best_response?.advice);
       setLlmComparison(result);
       fetchDashboardData();
       
@@ -126,15 +128,6 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
             </div>
             
             <div className="flex items-center space-x-4">
-              {onBackToHome && (
-                <button
-                  onClick={onBackToHome}
-                  className="flex items-center text-gray-600 hover:text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Tela Inicial
-                </button>
-              )}
               <span className="text-gray-600">Olá, {user?.name}</span>
               <button
                 onClick={logout}
@@ -347,6 +340,183 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
                 )}
               </div>
             </div>
+
+            {/* Seções de Recomendações Estruturadas */}
+            {llmComparison?.best_response?.advice && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Planos de Ação */}
+                <div className="bg-white p-6 rounded-xl shadow-md">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Plano de Ação
+                  </h3>
+                  {llmComparison.best_response.advice.recommendations ? (
+                    <div className="space-y-4">
+                      {/* Ações Imediatas */}
+                      {llmComparison.best_response.advice.recommendations.immediate && (
+                        <div>
+                          <h4 className="font-medium text-red-600 mb-2 flex items-center">
+                            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            Ações Imediatas
+                          </h4>
+                          <div className="space-y-2">
+                            {llmComparison.best_response.advice.recommendations.immediate.map((rec, index) => (
+                              <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="font-medium text-red-800 text-sm">
+                                  {rec.title || rec.action || 'Ação recomendada'}
+                                </div>
+                                <div className="text-red-700 text-xs mt-1">
+                                  {rec.description || rec.rationale || 'Descrição não disponível'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Curto Prazo */}
+                      {llmComparison.best_response.advice.recommendations.short_term && (
+                        <div>
+                          <h4 className="font-medium text-orange-600 mb-2 flex items-center">
+                            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Curto Prazo (1-6 meses)
+                          </h4>
+                          <div className="space-y-2">
+                            {llmComparison.best_response.advice.recommendations.short_term.map((rec, index) => (
+                              <div key={index} className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                <div className="font-medium text-orange-800 text-sm">
+                                  {rec.title || rec.action || 'Ação recomendada'}
+                                </div>
+                                <div className="text-orange-700 text-xs mt-1">
+                                  {rec.description || rec.rationale || 'Descrição não disponível'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Longo Prazo */}
+                      {llmComparison.best_response.advice.recommendations.long_term && (
+                        <div>
+                          <h4 className="font-medium text-green-600 mb-2 flex items-center">
+                            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                            Longo Prazo (6+ meses)
+                          </h4>
+                          <div className="space-y-2">
+                            {llmComparison.best_response.advice.recommendations.long_term.map((rec, index) => (
+                              <div key={index} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="font-medium text-green-800 text-sm">
+                                  {rec.title || rec.action || 'Ação recomendada'}
+                                </div>
+                                <div className="text-green-700 text-xs mt-1">
+                                  {rec.description || rec.rationale || 'Descrição não disponível'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <svg className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <p className="text-gray-500">
+                        Execute uma análise para ver o plano de ação personalizado
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Metas Mensuráveis */}
+                <div className="bg-white p-6 rounded-xl shadow-md">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Metas Mensuráveis
+                  </h3>
+                  {llmComparison?.best_response?.advice?.measurable_goals ? (
+                    <div className="space-y-3">
+                      {llmComparison.best_response.advice.measurable_goals.map((goal, index) => (
+                        <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                          <div className="font-medium text-purple-800 mb-1">
+                            {goal.meta || goal.goal || goal.title || 'Meta não especificada'}
+                          </div>
+                          <div className="text-sm text-purple-600 mb-1">
+                            <strong>Meta:</strong> {goal.valor_alvo || goal.target_value || goal.target || 'Valor não especificado'}
+                          </div>
+                          <div className="text-sm text-purple-600">
+                            <strong>Prazo:</strong> {goal.prazo || goal.timeframe || goal.deadline || 'Prazo não definido'}
+                          </div>
+                          {goal.current_status && (
+                            <div className="text-xs text-purple-500 mt-1">
+                              Status atual: {goal.current_status}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <svg className="h-12 w-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <p className="text-gray-500">
+                        Execute uma análise para ver suas metas financeiras personalizadas
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Avaliação Geral e Alertas */}
+            {llmComparison?.best_response?.advice && (
+              <div className="bg-white p-6 rounded-xl shadow-md">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Avaliação Financeira
+                </h3>
+                
+                {llmComparison.best_response.advice.overall_assessment && (
+                  <div className="prose prose-sm max-w-none mb-4">
+                    <p className="text-gray-700 leading-relaxed">
+                      {llmComparison.best_response.advice.overall_assessment}
+                    </p>
+                  </div>
+                )}
+
+                {llmComparison.best_response.advice.alerts && llmComparison.best_response.advice.alerts.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium text-red-600 mb-3 flex items-center">
+                      <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      Alertas Importantes
+                    </h4>
+                    <div className="space-y-2">
+                      {llmComparison.best_response.advice.alerts.map((alert, index) => (
+                        <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="font-medium text-red-800 text-sm">
+                            {alert.title || 'Alerta'}
+                          </div>
+                          <div className="text-red-700 text-xs mt-1">
+                            {alert.message || alert.description || 'Alerta sem detalhes'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -543,7 +713,7 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-md">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-                Comparação de Modelos LLM
+                Comparação de Modelos LLMs
               </h2>
 
               {llmComparison?.responses ? (

@@ -49,21 +49,40 @@ const FinancialAdvicePanel = ({ advice }) => {
   // Função para processar metas mensuráveis (objeto ou array)
   const processMeasurableGoals = (goals) => {
     if (!goals) return [];
-    
+
+    const normalize = (g) => {
+      if (!g) return null;
+      if (typeof g === 'string') {
+        return {
+          title: g,
+          description: null,
+          target: null,
+          timeframe: null,
+        };
+      }
+      if (typeof g === 'object') {
+        return {
+          title: g.meta || g.goal || g.title || 'Meta não especificada',
+          description: g.description || null,
+          target: g.valor_alvo || g.target_value || g.target || null,
+          timeframe: g.prazo || g.timeframe || g.deadline || null,
+          current_status: g.current_status || null,
+        };
+      }
+      return null;
+    };
+
     if (typeof goals === 'object' && !Array.isArray(goals)) {
-      // Se for objeto, converter para array de objetivos
-      return Object.entries(goals).map(([key, value]) => ({
-        title: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        description: value,
-        target: 'Conforme descrito',
-        timeframe: 'Conforme descrito'
-      }));
+      // Objeto chave->valor: converter para array normalizado
+      return Object.entries(goals)
+        .map(([key, value]) => normalize({ meta: key, description: value }))
+        .filter(Boolean);
     }
-    
+
     if (Array.isArray(goals)) {
-      return goals;
+      return goals.map(normalize).filter(Boolean);
     }
-    
+
     return [];
   };
 
@@ -115,8 +134,24 @@ const FinancialAdvicePanel = ({ advice }) => {
 
     const Icon = icon;
     
+    // Definir classes de borda baseado no tipo de seção
+    const getBorderClass = (sectionKey) => {
+      switch (sectionKey) {
+        case 'immediate':
+          return 'border-2 border-red-500'; // Borda vermelha espessa para ações imediatas
+        case 'shortTerm':
+          return 'border-2 border-orange-400'; // Borda laranja para curto prazo
+        case 'mediumTerm':
+          return 'border-2 border-blue-400'; // Borda azul para médio prazo
+        case 'longTerm':
+          return 'border-2 border-green-400'; // Borda verde para longo prazo
+        default:
+          return 'border border-gray-300'; // Borda padrão
+      }
+    };
+    
     return (
-      <div className="border rounded-lg">
+      <div className={`rounded-lg ${getBorderClass(sectionKey)}`}>
         <Button
           variant="ghost"
           className="w-full justify-between p-4"
@@ -343,14 +378,40 @@ const FinancialAdvicePanel = ({ advice }) => {
               {processMeasurableGoals(advice.measurableGoals).map((goal, index) => (
                 <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
                   <div className="font-medium text-purple-800 mb-1">
-                    {goal?.title || goal?.goal || 'Meta não especificada'}
+                    {goal?.title || 'Meta não especificada'}
                   </div>
-                  <div className="text-sm text-purple-600 mb-2">
-                    {goal?.description || goal?.target || 'Descrição não disponível'}
-                  </div>
+                  {goal?.target && (
+                    <div className="text-sm text-purple-600 mb-1">
+                      <strong>Meta:</strong> {(() => {
+                        const target = goal.target;
+                        // Verificar se é um valor monetário (contém números)
+                        const numericValue = parseFloat(target.toString().replace(/[^\d.-]/g, ''));
+                        
+                        if (!isNaN(numericValue)) {
+                          // É um valor monetário - formatar como moeda
+                          const absValue = Math.abs(numericValue);
+                          const colorClass = numericValue >= 0 ? 'text-green-600' : 'text-red-600';
+                          const formattedValue = new Intl.NumberFormat('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                          }).format(absValue);
+                          
+                          return <span className={colorClass}>{formattedValue}</span>;
+                        } else {
+                          // Não é valor monetário - exibir como texto normal
+                          return target;
+                        }
+                      })()}
+                    </div>
+                  )}
                   {goal?.timeframe && (
                     <div className="text-xs text-purple-500 mt-1">
                       <strong>Prazo:</strong> {goal.timeframe}
+                    </div>
+                  )}
+                  {goal?.description && (
+                    <div className="text-xs text-purple-500 mt-1">
+                      {goal.description}
                     </div>
                   )}
                 </div>

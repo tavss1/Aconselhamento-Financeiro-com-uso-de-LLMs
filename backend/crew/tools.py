@@ -111,7 +111,7 @@ class LocalLLMClient:
         print(f"\n[DEBUG] Executando comando LLM:\n{cmd}\n")
 
         try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=self.timeout)
+            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=self.timeout, encoding="utf-8", errors="replace")
         except subprocess.TimeoutExpired:
             raise JSONableError("Local LLM timed out")
 
@@ -471,6 +471,9 @@ class BankStatementParserTool(BaseTool):
     def _run(self, file_path: str, llm_enhanced: bool = False, categorization_method: str = "regex", 
              ollama_model: str = "gemma3", block_size: int = 10) -> str:
         try:
+            print(f"🔍 DEBUG - Iniciando processamento do arquivo: {file_path}")
+            print(f"🔍 DEBUG - Parâmetros: llm_enhanced={llm_enhanced}, method={categorization_method}")
+            
             ext = pathlib.Path(file_path).suffix.lower()
             if ext == ".csv":
                 df = self._read_csv(file_path)
@@ -478,8 +481,10 @@ class BankStatementParserTool(BaseTool):
                 return json.dumps({"ok": False, "error": f"Unsupported extension: {ext}"})
 
             if df is None or df.empty:
+                print(f"❌ DEBUG - DataFrame vazio ou None")
                 return json.dumps({"ok": False, "error": "Empty or unreadable statement"})
 
+            print(f"🔍 DEBUG - DataFrame carregado com {len(df)} linhas")
             df = self._normalize_columns(df)
 
             if "categoria" in df.columns and df["categoria"].notnull().any():
@@ -813,17 +818,21 @@ class FinancialAdvisorTool(BaseTool):
     args_schema = FinancialAdvisorToolSchema
 
     SYSTEM_PROMPT: ClassVar[str] = (
-        "RETORNE APENAS JSON NO FORMATO EXATO ABAIXO. NÃO ADICIONE TEXTO EXTRA.\n"
+        "RETORNE APENAS JSON NO FORMATO EXATO ABAIXO. NÃO ADICIONE TEXTO EXTRA. NÃO RETORNE CAMPOS 'status', 'response' OU 'resposta'.\n"
+        "IMPORTANTE: 'plano' deve ter ARRAYS com exatamente 3 itens cada:\n"
         "{\n"
-        '  "resumo": "Texto analisando situação financeira",\n'
-        '  "alertas": ["Texto alerta 1", "Texto alerta 2"],\n'
+        '  "resumo": "Análise da situação financeira do usuário",\n'
+        '  "alertas": ["Alerta crítico 1", "Alerta crítico 2"],\n'
         '  "plano": {\n'
         '    "agora": ["Ação 1", "Ação 2", "Ação 3"],\n'
         '    "30_dias": ["Meta 1", "Meta 2", "Meta 3"],\n'
         '    "12_meses": ["Objetivo 1", "Objetivo 2", "Objetivo 3"]\n'
         '  },\n'
-        '  "metas_mensuraveis": [{"meta": "Descrição", "kpi": "Indicador", "meta_num": 1000, "prazo_meses": 12}]\n'
+        '  "metas_mensuraveis": [\n'
+        '    {"meta": "Descrição da meta", "kpi": "Indicador", "meta_num": 1000, "prazo_meses": 12}\n'
+        '  ]\n'
         "}\n"
+        "CRUCIAL: SEMPRE use ARRAYS (listas) para agora, 30_dias e 12_meses, NUNCA strings únicas.\n"
         "ANÁLISE OS DADOS FINANCEIROS E RESPONDA APENAS JSON:"
     )
 
@@ -932,98 +941,194 @@ class FinancialAdvisorTool(BaseTool):
                 raise JSONableError("JSON extraction resulted in empty string")
 
             json_data = json.loads(raw_json)
+            
+            # Normalizar campos obrigatórios
+            advice = self._normalize_advice_fields(json_data)
+            
+            # Verificar se o conselho tem conteúdo útil ou é apenas uma resposta mínima
+            if self._is_minimal_response(advice):
+                print("[INFO] FinancialAdvisorTool: detectado resposta mínima do LLM, aplicando fallback heurístico")
+                advice = self._build_heuristic_advice(perfil_financeiro, totais_por_categoria, top_5_transacoes)
 
             return json.dumps({
                 "ok": True,
                 "timestamp": datetime.now().isoformat(),
-                "advice": json_data
+                "advice": advice
             }, ensure_ascii=False)
 
         except Exception as e:
+            print(f"[WARNING] FinancialAdvisorTool: erro com LLM, usando fallback heurístico: {e}")
+            # Fallback heurístico completo em caso de falha do LLM
+            fallback_advice = self._build_heuristic_advice(perfil_financeiro, totais_por_categoria, top_5_transacoes)
+            
             return json.dumps({
-                "ok": False,
-                "error": f"Erro ao gerar conselho: {e}",
-                "traceback": str(raw)[:400] if 'raw' in locals() and raw is not None else "No raw response",
-                "prompt_usado": prompt[:500] if 'prompt' in locals() else "No prompt"  # útil para debug
+                "ok": True,
+                "timestamp": datetime.now().isoformat(),
+                "advice": fallback_advice,
+                "fallback_used": True,
+                "llm_error": str(e)
             }, ensure_ascii=False)
+
+    def _normalize_advice_fields(self, data: dict) -> dict:
+        """Normaliza campos obrigatórios do conselho financeiro."""
+        advice = {
+            "resumo": data.get("resumo", data.get("summary", "Análise financeira baseada nos dados fornecidos.")),
+            "alertas": data.get("alertas", data.get("alerts", [])),
+            "plano": {
+                "agora": self._ensure_list(data.get("plano", {}).get("agora", [])),
+                "30_dias": self._ensure_list(data.get("plano", {}).get("30_dias", [])),
+                "12_meses": self._ensure_list(data.get("plano", {}).get("12_meses", []))
+            },
+            "metas_mensuraveis": data.get("metas_mensuraveis", data.get("measurable_goals", []))
+        }
         
-# from typing import Any, Optional, Union
-# from pydantic import BaseModel, Field
-# import json, re
-# from datetime import datetime
+        # Garantir que alertas é uma lista
+        if not isinstance(advice["alertas"], list):
+            advice["alertas"] = [str(advice["alertas"])] if advice["alertas"] else []
+        
+        # Garantir que metas_mensuraveis é uma lista de dicts
+        if not isinstance(advice["metas_mensuraveis"], list):
+            advice["metas_mensuraveis"] = []
+        
+        return advice
 
-# class FinancialAdvisorToolSchema(BaseModel):
-#     profile_json: Union[str, dict] = Field(
-#         description="JSON (string ou objeto) do perfil do usuário contendo idade, renda e objetivos."
-#     )
-#     categories_json: Union[str, dict, list] = Field(
-#         description="Resumo das categorias e seus valores, no formato [{'categoria': 'Moradia', 'valor': -1200.0}, ...]"
-#     )
-#     model: Optional[str] = Field(default="gemma3", description="Identificador do modelo Ollama a ser usado")
+    def _ensure_list(self, value, min_items=1):
+        """Garante que o valor seja uma lista com pelo menos min_items."""
+        if isinstance(value, list):
+            return value if len(value) >= min_items else value + [""] * (min_items - len(value))
+        elif isinstance(value, str) and value.strip():
+            return [value.strip()]
+        else:
+            return [""] * min_items
 
-# FinancialAdvisorToolSchema.model_rebuild()
+    def _is_minimal_response(self, advice: dict) -> bool:
+        """Verifica se a resposta do LLM é mínima/inútil."""
+        resumo = advice.get("resumo", "").lower().strip()
+        
+        # Respostas mínimas comuns
+        minimal_phrases = ["ok", "success", "sim", "não", "yes", "no", "status", "response"]
+        
+        if any(phrase in resumo for phrase in minimal_phrases) and len(resumo) < 20:
+            return True
+            
+        # Verificar se o plano está vazio ou com conteúdo inútil
+        plano = advice.get("plano", {})
+        total_plan_content = sum(
+            len(" ".join(plano.get(key, []))) 
+            for key in ["agora", "30_dias", "12_meses"]
+        )
+        
+        return total_plan_content < 50
 
+    def _build_heuristic_advice(self, perfil: dict, totais_por_categoria: list, top5_transacoes: list) -> dict:
+        """Constrói conselho financeiro usando heurísticas quando LLM falha."""
+        
+        renda = perfil.get("renda_mensal", 0)
+        despesas = perfil.get("total_despesas_calculado", 0)
+        objetivo = perfil.get("objetivo", {})
+        meta_valor = objetivo.get("valor_objetivo", 0)
+        
+        # Análise heurística básica
+        saldo = renda - despesas
+        taxa_poupanca = (saldo / renda * 100) if renda > 0 else 0
+        
+        # Categoria que mais gasta
+        categoria_maior = max(totais_por_categoria, key=lambda x: abs(x.get("valor", 0)), default={})
+        categoria_nome = categoria_maior.get("categoria", "Outros")
+        categoria_valor = abs(categoria_maior.get("valor", 0))
+        
+        # Resumo heurístico
+        if saldo < 0:
+            resumo = f"Sua situação financeira requer atenção: gastos (R$ {despesas:.2f}) superam a renda (R$ {renda:.2f}). Maior gasto: {categoria_nome} (R$ {categoria_valor:.2f})."
+        elif taxa_poupanca < 10:
+            resumo = f"Taxa de poupança baixa ({taxa_poupanca:.1f}%). Renda: R$ {renda:.2f}, Gastos: R$ {despesas:.2f}. Maior categoria de gasto: {categoria_nome}."
+        else:
+            resumo = f"Situação financeira estável com {taxa_poupanca:.1f}% de poupança. Continue monitorando gastos em {categoria_nome}."
+        
+        # Alertas heurísticos
+        alertas = []
+        if saldo < 0:
+            alertas.append("Gastos superiores à renda - ação imediata necessária")
+        if taxa_poupanca < 20:
+            alertas.append("Taxa de poupança abaixo do recomendado (20%)")
+        if categoria_valor > renda * 0.3:
+            alertas.append(f"Gastos elevados em {categoria_nome} - revisar necessidades")
+        
+        # Planos heurísticos
+        plano_agora = [
+            f"Revisar gastos em {categoria_nome}",
+            "Listar todas as despesas essenciais",
+            "Estabelecer orçamento semanal"
+        ]
+        
+        plano_30_dias = [
+            "Reduzir gastos desnecessários em 15%",
+            f"Limitar gastos em {categoria_nome} a R$ {categoria_valor * 0.8:.2f}",
+            "Criar reserva de emergência"
+        ]
+        
+        plano_12_meses = [
+            f"Atingir meta de R$ {meta_valor:.2f}" if meta_valor > 0 else "Economizar 3 meses de despesas",
+            "Aumentar renda através de qualificação",
+            "Diversificar investimentos"
+        ]
+        
+        # Metas mensuráveis
+        meta_economia_mensal = max(renda * 0.2, 200)  # 20% da renda ou R$ 200
+        metas = [
+            {
+                "meta": "Aumentar taxa de poupança",
+                "kpi": "Percentual poupado mensalmente",
+                "meta_num": 20,
+                "prazo_meses": 6
+            },
+            {
+                "meta": "Reduzir gastos desnecessários",
+                "kpi": f"Economia mensal em {categoria_nome}",
+                "meta_num": categoria_valor * 0.2,
+                "prazo_meses": 3
+            }
+        ]
+        
+        return {
+            "resumo": resumo,
+            "alertas": alertas,
+            "plano": {
+                "agora": plano_agora,
+                "30_dias": plano_30_dias,
+                "12_meses": plano_12_meses
+            },
+            "metas_mensuraveis": metas
+        }
+        
+        def _normalize_advice_structure(self, data: dict) -> dict:
+            """Garante que o JSON siga o template oficial do frontend."""
+            plano = data.get("plano", {})
+            metas = data.get("metas_mensuraveis", [])
 
-# class FinancialAdvisorTool(BaseTool):
-#     name: str = "FinancialAdvisorTool"
-#     description: str = (
-#         "Gera aconselhamento financeiro PERSONALIZADO em JSON. "
-#         "Usa o perfil e os totais por categoria para criar plano de ação."
-#     )
-#     args_schema = FinancialAdvisorToolSchema
+            # Corrigir plano
+            if isinstance(plano, dict):
+                plano_corrigido = {
+                    "agora": plano.get("curto_prazo_30_dias") if isinstance(plano.get("curto_prazo_30_dias"), list) else [plano.get("curto_prazo_30_dias", "")],
+                    "30_dias": plano.get("medio_prazo_12_meses") if isinstance(plano.get("medio_prazo_12_meses"), list) else [plano.get("medio_prazo_12_meses", "")],
+                    "12_meses": plano.get("longo_prazo_15_meses") if isinstance(plano.get("longo_prazo_15_meses"), list) else [plano.get("longo_prazo_15_meses", "")]
+                }
+            else:
+                plano_corrigido = {"agora": [], "30_dias": [], "12_meses": []}
 
-#     SYSTEM_PROMPT: ClassVar[str] = (
-#         "⚠️ MODO ESTRITO: RESPOSTA APENAS JSON ⚠️\n"
-#         "Você é um consultor financeiro automatizado. Não cumprimente, não explique, não use markdown.\n"
-#         "Formato obrigatório:\n"
-#         "{\n"
-#         "  \"resumo\": \"...\",\n"
-#         "  \"alertas\": [\"...\"],\n"
-#         "  \"plano\": {\"agora\": [\"...\"], \"30_dias\": [\"...\"], \"12_meses\": [\"...\"]},\n"
-#         "  \"metas_mensuraveis\": [{\"meta\": \"...\", \"kpi\": \"...\", \"meta_num\": 0, \"prazo_meses\": 12}]\n"
-#         "}\n"
-#         "Não adicione nada fora das chaves."
-#     )
+            # Corrigir metas
+            metas_corrigidas = []
+            if isinstance(metas, dict):
+                metas_corrigidas.append({"meta": metas.get("meta_principal", ""), "kpi": "", "meta_num": 0, "prazo_meses": 12})
+                for sec in metas.get("metas_secundarias", []):
+                    metas_corrigidas.append({"meta": sec, "kpi": "", "meta_num": 0, "prazo_meses": 12})
+            elif isinstance(metas, list):
+                metas_corrigidas = metas
 
-#     def _run(self, profile_json: Any, categories_json: Any, model: Optional[str] = None) -> str:
+            data["plano"] = plano_corrigido
+            data["metas_mensuraveis"] = metas_corrigidas
+            return data
 
-#         client = LocalLLMClient()
-#         model = model or "gemma3"
-
-#         try:
-#             profile = json.loads(profile_json) if isinstance(profile_json, str) else profile_json
-#             categories = json.loads(categories_json) if isinstance(categories_json, str) else categories_json
-#         except Exception as e:
-#             return json.dumps({"ok": False, "error": f"Erro ao parsear JSON de entrada: {e}"}, ensure_ascii=False)
-
-#         # Prompt minimalista e claro
-#         prompt = (
-#             self.SYSTEM_PROMPT
-#             + "\n\nPerfil financeiro:\n"
-#             + json.dumps(profile, ensure_ascii=False, indent=2)
-#             + "\n\nResumo de gastos por categoria:\n"
-#             + json.dumps(categories, ensure_ascii=False, indent=2)
-#             + "\n\n⚠️ Responda agora APENAS COM JSON válido ⚠️"
-#         )
-
-#         try:
-#             raw = client.generate(prompt, model=model)
-#             raw = re.sub(r"^[`']{3,}\s*json\s*|[`']{3,}\s*$", "", raw.strip(), flags=re.IGNORECASE)
-#             match = re.search(r'\{(?:[^{}]|(?R))*\}', raw, re.DOTALL)
-#             json_str = match.group(0) if match else "{}"
-#             advice = json.loads(json_str)
-
-#             return json.dumps({
-#                 "ok": True,
-#                 "timestamp": datetime.now().isoformat(),
-#                 "advice": advice
-#             }, ensure_ascii=False, indent=2)
-#         except Exception as e:
-#             return json.dumps({
-#                 "ok": False,
-#                 "error": f"Erro ao gerar conselho: {str(e)}",
-#                 "resposta_bruta": raw[:300] if 'raw' in locals() else None
-#             }, ensure_ascii=False)
 
 # ----------------------------------------------------------------------------
 # 4) ModelEvaluatorTool (LLM-as-a-judge + heuristics fallback)
@@ -1310,10 +1415,14 @@ class DashboardDataCompilerTool(BaseTool):
                     "error": "transactions_json deve conter array 'transacoes'"
                 })
             
-            if not isinstance(advice.get("advice"), dict):
+            # Verificar se advice tem a estrutura nova (direta) ou antiga (com chave "advice")
+            if not (isinstance(advice, dict) and (
+                    "plano" in advice or  # Estrutura nova direta
+                    isinstance(advice.get("advice"), dict)  # Estrutura antiga com wrapper
+                )):
                 return json.dumps({
                     "ok": False,
-                    "error": "advice_json deve conter objeto 'advice'"
+                    "error": "advice_json deve conter dados de plano financeiro válidos"
                 })
             
             print("[INFO] Dados obrigatórios validados com sucesso")
@@ -1478,7 +1587,6 @@ class DashboardDataCompilerTool(BaseTool):
         recommendations = {
             "immediate": self._extract_timeline_advice(advice_data.get("plano", {}).get("agora", [])),
             "short_term": self._extract_timeline_advice(advice_data.get("plano", {}).get("30_dias", [])),
-            "medium_term": self._extract_timeline_advice(advice_data.get("plano", {}).get("90_dias", [])),
             "long_term": self._extract_timeline_advice(advice_data.get("plano", {}).get("12_meses", []))
         }
         

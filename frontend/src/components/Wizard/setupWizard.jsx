@@ -32,10 +32,6 @@ export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => 
   const handleQuestionnaireComplete = async (data) => {
     try {
       console.log('=== SetupWizard - handleQuestionnaireComplete ===');
-      console.log('Dados recebidos do questionário:', data);
-      console.log('Tipo dos dados:', typeof data);
-      console.log('É um objeto?', typeof data === 'object' && data !== null);
-      console.log('Dados como JSON string:', JSON.stringify(data, null, 2));
       console.log('Token disponível:', !!token);
       console.log('Usuário autenticado:', isAuthenticated());
       console.log('Usuário:', user);

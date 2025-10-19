@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
-import { Loader2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ArrowLeft, Home } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, AlertTriangle, CheckCircle } from 'lucide-react';
 import { financialDashboardService } from '../../services/financialDashboardService';
 import ExpenseBreakdownChart from './ExpenseBreakdownChart';
 import FinancialHealthCard from './FinancialHealthCard';
@@ -95,30 +95,28 @@ const FinancialDashboard = ({ onBackToHome }) => {
     );
   }
 
-  const { profile, transactions, advice, charts, alerts, metadata } = dashboardData;
+  const { profile = {}, transactions = {}, advice = {}, charts = {}, alerts = [], metadata = {} } = dashboardData;
+
+  // Verificação adicional para dados críticos
+  if (!profile && !transactions && !advice) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Dados incompletos recebidos do servidor. Tente atualizar a página ou execute uma nova análise financeira.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* Botão de Navegação */}
-      {onBackToHome && (
-        <div className="mb-6">
-          <button
-            onClick={onBackToHome}
-            className="flex items-center text-blue-600 hover:text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors font-medium"
-          >
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            Voltar para Configurações
-          </button>
-        </div>
-      )}
-
       {/* Header com informações do usuário */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Financeiro</h1>
-          <p className="text-gray-600 mt-1">
-            Análise gerada em {new Date(metadata.generatedAt).toLocaleDateString('pt-BR')}
-          </p>
         </div>
         <Button
           onClick={handleRefresh}
@@ -159,6 +157,30 @@ const FinancialDashboard = ({ onBackToHome }) => {
         </div>
       )}
 
+      {/* Card de Informações da Análise */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Informações da Análise</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-gray-600">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <strong>Transações analisadas:</strong> {transactions?.summary?.total_transactions || metadata?.totalDataPoints || 'N/A'}
+            </div>
+            <div>
+              <strong>Modelo LLM:</strong> {metadata?.llmModel || 'N/A'}
+            </div>
+            <div>
+              <strong>Última atualização:</strong>{' '}
+              {new Date(metadata?.generatedAt || Date.now()).toLocaleString('pt-BR')}
+            </div>
+            <div>
+              <strong>Perfil de risco:</strong> {metadata?.riskProfile || profile?.riskProfile || 'N/A'}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Cards de métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Renda Mensal */}
@@ -169,7 +191,7 @@ const FinancialDashboard = ({ onBackToHome }) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {financialDashboardService.formatCurrency(profile.monthlyIncome)}
+              {financialDashboardService.formatCurrency(profile?.monthlyIncome || 0)}
             </div>
           </CardContent>
         </Card>
@@ -182,7 +204,7 @@ const FinancialDashboard = ({ onBackToHome }) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {financialDashboardService.formatCurrency(profile.monthlyExpenses)}
+              {financialDashboardService.formatCurrency(profile?.monthlyExpenses || 0)}
             </div>
           </CardContent>
         </Card>
@@ -195,10 +217,15 @@ const FinancialDashboard = ({ onBackToHome }) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {financialDashboardService.formatCurrency(profile.savingsCapacity)}
+              {(() => {
+                // Se o fluxo de caixa for negativo, capacidade de poupança é 0
+                const netFlow = transactions?.summary?.net_flow || 0;
+                const savingsCapacity = netFlow < 0 ? 0 : (profile?.savingsCapacity || 0);
+                return financialDashboardService.formatCurrency(savingsCapacity);
+              })()}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              {financialDashboardService.formatPercentage(profile.savingsRate)} da renda
+              {financialDashboardService.formatPercentage(profile?.savingsRate || 0)} da renda
             </p>
           </CardContent>
         </Card>
@@ -207,7 +234,7 @@ const FinancialDashboard = ({ onBackToHome }) => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Fluxo de Caixa</CardTitle>
-            {transactions.summary.net_flow >= 0 ? (
+            {(transactions?.summary?.net_flow || 0) >= 0 ? (
               <TrendingUp className="h-4 w-4 text-green-600" />
             ) : (
               <TrendingDown className="h-4 w-4 text-red-600" />
@@ -215,12 +242,12 @@ const FinancialDashboard = ({ onBackToHome }) => {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${
-              transactions.summary.net_flow >= 0 ? 'text-green-600' : 'text-red-600'
+              (transactions?.summary?.net_flow || 0) >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              {financialDashboardService.formatCurrency(transactions.summary.net_flow)}
+              {financialDashboardService.formatCurrency(transactions?.summary?.net_flow || 0)}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              {transactions.summary.total_transactions} transações analisadas
+              {transactions?.summary?.total_transactions || 0} transações analisadas
             </p>
           </CardContent>
         </Card>
@@ -251,30 +278,6 @@ const FinancialDashboard = ({ onBackToHome }) => {
           <FinancialAdvicePanel advice={advice} />
         </div>
       </div>
-
-      {/* Footer com metadata */}
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle className="text-sm">Informações da Análise</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-gray-600">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <strong>Pontos de dados:</strong> {metadata.totalDataPoints}
-            </div>
-            <div>
-              <strong>Modelo LLM:</strong> {metadata.llmModel || 'N/A'}
-            </div>
-            <div>
-              <strong>Última atualização:</strong>{' '}
-              {new Date(metadata.generatedAt).toLocaleString('pt-BR')}
-            </div>
-            <div>
-              <strong>Perfil de risco:</strong> {profile.riskProfile}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

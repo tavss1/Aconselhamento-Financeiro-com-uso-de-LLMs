@@ -63,7 +63,7 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
   chartData.forEach(item => {
     if (!item.percentage) {
-      item.percentage = ((item.value / total) * 100).toFixed(1);
+      item.percentage = ((item.value / total) * 100).toFixed(2);
     }
   });
 
@@ -74,6 +74,7 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const percentage = ((data.value / total) * 100).toFixed(2);
       return (
         <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
           <p className="font-semibold text-gray-800">{data.name}</p>
@@ -81,8 +82,13 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
             Valor: {financialDashboardService.formatCurrency(data.originalValue)}
           </p>
           <p className="text-gray-600">
-            Porcentagem: {data.percentage}%
+            Porcentagem: {percentage}%
           </p>
+          {data.transaction_count > 0 && (
+            <p className="text-gray-500 text-sm">
+              {data.transaction_count} {data.transaction_count === 1 ? 'transação' : 'transações'}
+            </p>
+          )}
         </div>
       );
     }
@@ -93,18 +99,22 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
   const CustomLegend = ({ payload }) => {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-        {payload.map((entry, index) => (
-          <div key={index} className="flex items-center space-x-2 text-sm">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-gray-700 truncate">{entry.value}</span>
-            <span className="text-gray-500 text-xs ml-auto">
-              {chartData.find(item => item.name === entry.value)?.percentage}%
-            </span>
-          </div>
-        ))}
+        {payload.map((entry, index) => {
+          const item = chartData.find(item => item.name === entry.value);
+          const percentage = item ? ((item.value / total) * 100).toFixed(2) : '0.00';
+          return (
+            <div key={index} className="flex items-center space-x-2 text-sm">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-gray-700 truncate">{entry.value}</span>
+              <span className="text-gray-500 text-xs ml-auto">
+                {percentage}%
+              </span>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -131,8 +141,12 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ percentage }) => `${percentage}%`}
-                  outerRadius={80}
+                  label={({ value, name }) => {
+                    const percentage = ((value / total) * 100).toFixed(2);
+                    return `${percentage}%`;
+                  }}
+                  outerRadius={90}
+                  innerRadius={30}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -165,7 +179,7 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
                       </span>
                       {item.transaction_count > 0 && (
                         <div className="text-xs text-gray-500">
-                          {item.transaction_count} transação{item.transaction_count !== 1 ? 'ões' : ''}
+                          {item.transaction_count} {item.transaction_count === 1 ? 'transação' : 'transações'}
                         </div>
                       )}
                     </div>
@@ -175,7 +189,7 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
                       {financialDashboardService.formatCurrency(item.originalValue)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {item.percentage}% do total
+                      {((item.value / total) * 100).toFixed(2)}% do total
                     </div>
                   </div>
                 </div>
@@ -218,7 +232,7 @@ const ExpenseBreakdownChart = ({ data, chartConfig }) => {
                   {index + 1}. {item.name}
                 </span>
                 <span className="font-medium text-blue-800">
-                  {item.percentage}%
+                  {((item.value / total) * 100).toFixed(2)}%
                 </span>
               </div>
             ))}

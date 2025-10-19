@@ -155,28 +155,23 @@ const FinancialHealthCard = ({ dashboardData }) => {
           
           <div className="text-center">
             <div className="text-lg font-bold text-purple-600">
-              {financialDashboardService.formatPercentage(dashboardData.profile.debtToIncome * 100)}
+              {(() => {
+                const debtRatio = dashboardData.profile.debtToIncome;
+                console.log('🔍 debtToIncome value:', debtRatio, 'type:', typeof debtRatio);
+                
+                if (typeof debtRatio === 'number' && !isNaN(debtRatio)) {
+                  // debtToIncome já vem como decimal (0.2 = 20%), então multiplicamos por 100
+                  const result = financialDashboardService.formatPercentage(debtRatio * 100);
+                  return result;
+                }
+                return '0,0%';
+              })()}
             </div>
             <div className="text-xs text-gray-600">Endividamento</div>
           </div>
         </div>
 
-        {/* Reserva de emergência em meses */}
-        <div className="pt-2 border-t">
-          <div className="text-center">
-            <div className="text-lg font-bold text-orange-600">
-              {(dashboardData.profile.liquidAssets / dashboardData.profile.monthlyExpenses).toFixed(1)} meses
-            </div>
-            <div className="text-xs text-gray-600">Reserva de Emergência</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {dashboardData.profile.liquidAssets / dashboardData.profile.monthlyExpenses >= 6 
-                ? 'Reserva adequada' 
-                : dashboardData.profile.liquidAssets / dashboardData.profile.monthlyExpenses >= 3
-                ? 'Reserva mínima'
-                : 'Reserva insuficiente'}
-            </div>
-          </div>
-        </div>
+        {/* Seção de reserva de emergência removida conforme solicitação */}
       </CardContent>
     </Card>
   );

@@ -6,6 +6,7 @@ import { SetupWizard } from './components/Wizard/setupWizard';
 import { LoadingSpinner } from './components/Components/loadingSpinner';
 import { dashboardService } from './services/dashboardService';
 import Dashboard from './pages/Dashboard';
+import { Home } from 'lucide-react';
 
 const AppContent = () => {
   const { isAuthenticated, loading, user, token, logout } = useAuth();
@@ -143,9 +144,16 @@ const AppContent = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <h1 className="text-xl font-semibold text-gray-900">
-                  Aconselhamento Financeiro
+                  Aconselhamento Financeiro com uso de LLMs
                 </h1>
                 <div className="flex space-x-4">
+                  <button
+                    onClick={handleBackToWizard}
+                    className="text-blue-600 hover:text-blue-900 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2"
+                  >
+                    <Home className="h-4 w-4" />
+                    Início
+                  </button>
                   <button
                     onClick={() => {
                       logout();

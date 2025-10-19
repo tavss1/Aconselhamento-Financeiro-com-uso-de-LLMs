@@ -156,6 +156,7 @@ class FinancialDashboardService {
     const visualizations = dashboard?.visualizations;
     const comparativeMetrics = dashboard?.comparative_metrics;
     const alertsAndNotifications = dashboard?.alerts_and_notifications;
+    const modelInfo = dashboard?.model_info;
 
     // Log detalhado de cada seção
     console.log('🔍 metadata:', metadata);
@@ -164,6 +165,7 @@ class FinancialDashboardService {
     console.log('🔍 visualizations:', visualizations);
     console.log('🔍 comparativeMetrics:', comparativeMetrics);
     console.log('🔍 alertsAndNotifications:', alertsAndNotifications);
+    console.log('🔍 modelInfo:', modelInfo);
 
     // Extrair dados do perfil dos comparative_metrics e transactions_analysis
     const spendingPatterns = comparativeMetrics?.spending_patterns;
@@ -180,7 +182,7 @@ class FinancialDashboardService {
         debtToIncome: comparativeMetrics?.debt_to_income,
         savingsRate: spendingPatterns?.savings_rate_percentage,
         liquidAssets: comparativeMetrics?.liquid_assets,
-        riskProfile: metadata?.risk_profile,
+        riskProfile: metadata?.risk_profile || comparativeMetrics?.risk_profile || 'moderado',
         goal: metadata?.goal
       },
       transactions: {
@@ -204,7 +206,12 @@ class FinancialDashboardService {
       benchmarks: comparativeMetrics?.benchmarks,
       spendingPatterns: spendingPatterns,
       alerts: this.formatAlerts(alertsAndNotifications),
-      metadata: metadata
+      metadata: {
+        ...metadata,
+        llmModel: modelInfo?.llm_used || metadata?.llm_model || 'ollama/gemma3',
+        evaluationEnabled: modelInfo?.evaluation_enabled,
+        riskProfile: metadata?.risk_profile || comparativeMetrics?.risk_profile || 'moderado'
+      }
     };
 
     console.log('✅ Dados processados finais:', processedData);
@@ -305,7 +312,6 @@ class FinancialDashboardService {
         factors: [
           { name: 'Taxa de Poupança', status: 'poor', points: 0 },
           { name: 'Endividamento', status: 'poor', points: 0 },
-          { name: 'Reserva de Emergência', status: 'poor', points: 0 },
           { name: 'Fluxo de Caixa', status: 'poor', points: 0 }
         ],
         maxScore: 100
@@ -347,42 +353,29 @@ class FinancialDashboardService {
       factors.push({ name: 'Endividamento', status: 'poor', points: 0 });
     }
 
-    // Fator 3: Reserva de emergência
-    const liquidAssets = profile?.liquidAssets || 0;
-    const monthlyExpenses = profile?.monthlyExpenses || 1; // Evitar divisão por zero
-    const emergencyMonths = liquidAssets / monthlyExpenses;
-    if (emergencyMonths >= 6) {
-      score += 25;
-      factors.push({ name: 'Reserva de Emergência', status: 'excellent', points: 25 });
-    } else if (emergencyMonths >= 3) {
-      score += 15;
-      factors.push({ name: 'Reserva de Emergência', status: 'good', points: 15 });
-    } else if (emergencyMonths >= 1) {
-      score += 5;
-      factors.push({ name: 'Reserva de Emergência', status: 'fair', points: 5 });
-    } else {
-      factors.push({ name: 'Reserva de Emergência', status: 'poor', points: 0 });
-    }
-
-    // Fator 4: Fluxo de caixa
+    // Fator 3: Fluxo de caixa
     const netFlow = transactions?.summary?.net_flow || 0;
     if (netFlow > 0) {
       score += 25;
       factors.push({ name: 'Fluxo de Caixa', status: 'excellent', points: 25 });
     } else if (netFlow > -100) {
       score += 10;
-      factors.push({ name: 'Fluxo de Caixa', status: 'fair', points: 10 });
+  factors.push({ name: 'Fluxo de Caixa', status: 'fair', points: 10 });
     } else {
       factors.push({ name: 'Fluxo de Caixa', status: 'poor', points: 0 });
     }
 
+    // Normalizar a pontuação para escala de 0 a 100 considerando 3 fatores (máx. 75)
+    const rawScore = score; // máximo possível 75
+    const normalizedScore = Math.round((rawScore / 75) * 100);
+
     let healthStatus = 'poor';
-    if (score >= 80) healthStatus = 'excellent';
-    else if (score >= 60) healthStatus = 'good';
-    else if (score >= 40) healthStatus = 'fair';
+    if (normalizedScore >= 80) healthStatus = 'excellent';
+    else if (normalizedScore >= 60) healthStatus = 'good';
+    else if (normalizedScore >= 40) healthStatus = 'fair';
 
     return {
-      score,
+      score: normalizedScore,
       status: healthStatus,
       factors,
       maxScore: 100
