@@ -53,18 +53,17 @@ class FinancialDashboardService {
 
   async runFinancialAnalysis(analysisConfig = {}) {
     const requestBody = {
-      config: {
-        categorization_method: analysisConfig.method || "ollama"
-      }
+      categorization_method: analysisConfig.method || "ollama",
+      model: analysisConfig.model || "gemma3"
     };
     
     const token = this.getToken();
-    return this.apiClient.post('/financial/run-analysis', requestBody, token);
+    return this.apiClient.post('/api/financial/analyze-with-crewai', requestBody, token);
   }
 
   async getAnalysisStatus(userId) {
     const token = this.getToken();
-    return this.apiClient.get(`/financial/analysis-status/${userId}`, token);
+    return this.apiClient.get(`api/financial/analysis-status/${userId}`, token);
   }
 
   async getAnalysisHistory() {
@@ -208,9 +207,9 @@ class FinancialDashboardService {
       alerts: this.formatAlerts(alertsAndNotifications),
       metadata: {
         ...metadata,
-        llmModel: modelInfo?.llm_used || metadata?.llm_model || 'ollama/gemma3',
+        llmModel: modelInfo?.llm_used || metadata?.llm_model,
         evaluationEnabled: modelInfo?.evaluation_enabled,
-        riskProfile: metadata?.risk_profile || comparativeMetrics?.risk_profile || 'moderado'
+        riskProfile: metadata?.risk_profile || comparativeMetrics?.risk_profile
       }
     };
 
@@ -392,7 +391,7 @@ export const useFinancialAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const runCompleteAnalysis = async () => {
+  const runCompleteAnalysis = async (analysisConfig = {}) => {
     setLoading(true);
     setError(null);
 
@@ -401,7 +400,7 @@ export const useFinancialAnalysis = () => {
 
       // 1. Executar análise financeira com CrewAI
       console.log('📊 Executando análise com LLMs...');
-      const results = await financialDashboardService.runFinancialAnalysis();
+      const results = await financialDashboardService.runFinancialAnalysis(analysisConfig);
       console.log('✅ Análise executada:', results);
 
       // 2. Buscar dados do dashboard

@@ -4,16 +4,17 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
 import { financialDashboardService } from '../../services/financialDashboardService';
+import ModelSelectionModal from './ModelSelectionModal';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const NAVIGATION_TABS = [
   { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
   { id: 'history', label: 'Histórico', icon: History },
-  { id: 'comparison', label: 'Comparação LLMs', icon: FileText }
+  // { id: 'comparison', label: 'Comparação LLMs', icon: FileText }
 ];
 
-export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extractData, onBackToHome }) => {
+export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extractData, onBackToHome, onBackToProfile }) => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
@@ -22,6 +23,7 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
   const [redirectingToDashboard, setRedirectingToDashboard] = useState(false);
   const [analysisHistory, setAnalysisHistory] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showModelSelection, setShowModelSelection] = useState(false);
   const { token, user, logout } = useAuth();
 
   useEffect(() => {
@@ -30,17 +32,20 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
 
   const fetchDashboardData = async () => {
     try {
+      console.log('📊 Tentando carregar dados existentes do dashboard...');
       const data = await dashboardService.getFinancialReports(token);
+      console.log('✅ Dados do dashboard carregados:', data);
       setDashboardData(data);
     } catch (error) {
-      console.error('Erro ao carregar dashboard:', error);
+      console.log('⚠️ Nenhum dado de dashboard encontrado (normal se for primeira análise):', error.message);
+      // Não é um erro crítico - pode não ter análise ainda
+      setDashboardData(null);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchAnalysisHistory = async () => {
-    if (analysisHistory) return; // Já carregado
     
     setLoadingHistory(true);
     try {
@@ -75,34 +80,69 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
   };
 
   const openDashboardFromHistory = (analysisId) => {
+    console.log('📊 Visualizando análise histórica:', analysisId);
+    // Chamar callback para redirecionar para dashboard
     if (onAnalysisComplete) {
-      console.log('🚀 Abrindo dashboard para análise:', analysisId);
+      console.log('🔄 Redirecionando para dashboard com análise histórica');
       onAnalysisComplete();
     }
   };
 
-  const generateFinancialAdvice = async () => {
+  const handleGenerateAdviceClick = () => {
+    console.log('🎯 Abrindo modal de seleção de modelo');
+    console.log('🔍 Verificando se existem dados do questionário...');
+    
+    // Verificar se há dados básicos necessários
+    if (!token) {
+      alert('Você precisa estar logado para gerar conselhos financeiros.');
+      return;
+    }
+    
+    setShowModelSelection(true);
+  };
+
+  const generateFinancialAdvice = async (selectedModel) => {
+    console.log('🚀 Iniciando geração de análise financeira com modelo:', selectedModel);
+    console.log('🔗 Rota que será chamada: /api/financial/analyze-with-crewai');
+    
+    setShowModelSelection(false);
     setGeneratingAdvice(true);
+    
     try {
-      const result = await dashboardService.generateFinancialAdvice(token);
-      console.log('🔍 Resultado da análise financeira:', result);
-      console.log('🔍 Best response advice structure:', result?.best_response?.advice);
-      setLlmComparison(result);
-      fetchDashboardData();
+      // Configuração da análise com modelo selecionado
+      const analysisConfig = {
+        categorization_method: selectedModel
+      };
       
-      // Se a análise foi concluída e existe callback, chama o redirecionamento
+      console.log('⚙️ Configuração da análise:', analysisConfig);
+      
+      // Chamar o serviço que fará a requisição para /api/financial/analyze-with-crewai
+      const result = await dashboardService.runFinancialAnalysis(analysisConfig);
+      
+      console.log('✅ Resposta da análise CrewAI:', result);
+      
+      // Atualizar estado com resultado
+      //setLlmComparison(result);
+      
+      // NÃO recarregar dados antigos - usar o resultado recém-gerado
+      console.log('📊 Usando dados da nova análise ao invés de buscar dados antigos');
+      
+      // Se a análise foi concluída com sucesso, redirecionar para dashboard
       if (result._analysisCompleted && result._shouldRedirectToDashboard && onAnalysisComplete) {
-        console.log('🚀 Análise CrewAI concluída, redirecionando para dashboard completo');
+        console.log('🎯 Análise CrewAI concluída com sucesso! Redirecionando para dashboard completo em 3 segundos...');
         setRedirectingToDashboard(true);
         
         // Pequeno delay para permitir que o usuário veja a conclusão
         setTimeout(() => {
           onAnalysisComplete();
         }, 3000);
+      } else if (result._analysisCompleted) {
+        console.log('✅ Análise CrewAI concluída! Permanecendo na tela home');
       }
     } catch (error) {
-      console.error('Erro:', error);
-      alert('Erro ao gerar conselhos financeiros');
+      console.error('❌ Erro ao gerar conselhos financeiros:', error);
+      console.error('📍 Stack trace:', error.stack);
+      alert('Erro ao gerar conselhos financeiros: ' + (error.message || 'Erro desconhecido'));
     } finally {
       setGeneratingAdvice(false);
     }
@@ -117,29 +157,7 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-800">Aconselhamento Financeiro com uso de LLMs</h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-600">Olá, {user?.name}</span>
-              <button
-                onClick={logout}
-                className="flex items-center text-gray-500 hover:text-gray-700"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="bg-gray-50">
       {/* Navigation */}
       <nav className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -257,7 +275,7 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
                     Conselhos Financeiros IA
                   </h3>
                   <button
-                    onClick={generateFinancialAdvice}
+                    onClick={handleGenerateAdviceClick}
                     disabled={generatingAdvice}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center"
                   >
@@ -674,7 +692,7 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
                               }`}
                             >
                               <ExternalLink className="h-3 w-3 mr-1" />
-                              Dashboard
+                              Visualizar
                             </button>
                           </div>
                         </div>
@@ -831,6 +849,14 @@ export const SimpleDashboard = ({ onAnalysisComplete, questionnaireData, extract
           </div>
         )}
       </main>
+
+      {/* Modal de Seleção de Modelo */}
+      <ModelSelectionModal
+        isOpen={showModelSelection}
+        onClose={() => setShowModelSelection(false)}
+        onConfirm={generateFinancialAdvice}
+        loading={generatingAdvice}
+      />
     </div>
   );
 };

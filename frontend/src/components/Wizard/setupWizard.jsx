@@ -5,7 +5,7 @@ import { FinancialQuestionnaire } from '../Questionario/financialQuestionnaire';
 import { ExtractUpload } from '../Upload/extractUpload';
 import { SimpleDashboard } from '../Dashboard/simpleDashboard';
 
-export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => {
+export const SetupWizard = ({ onComplete, onBackToProfile }) => {
   const [currentStep, setCurrentStep] = useState('questionnaire');
   const [questionnaireData, setQuestionnaireData] = useState(null);
   const [extractData, setExtractData] = useState(null);
@@ -21,6 +21,7 @@ export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => 
   const checkForExistingAnalysis = async () => {
     try {
       const analysisStatus = await dashboardService.checkAnalysisStatus();
+      // Só mostra a opção de dashboard se o usuário tem análise concluída
       if (analysisStatus.has_analysis) {
         setShowDashboardOption(true);
       }
@@ -77,7 +78,12 @@ export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => 
 
     // Salvar dados do extrato
     setExtractData(uploadData);
-    setCurrentStep('dashboard');
+    
+    // Perfil completo - redirecionar para home
+    console.log('✅ Perfil financeiro completo, redirecionando para home');
+    if (onComplete) {
+      onComplete();
+    }
   };
 
   // Mostrar erro se houver
@@ -121,33 +127,6 @@ export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => 
     case 'questionnaire':
       return (
         <div>
-          {/* Banner para usuários com análise existente */}
-          {showDashboardOption && (
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <svg className="h-5 w-5 text-blue-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <div>
-                    <p className="text-sm font-medium text-blue-800">
-                      Você já possui uma análise financeira concluída!
-                    </p>
-                    <p className="text-xs text-blue-600">
-                      Você pode ir diretamente para o dashboard ou atualizar seus dados aqui.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onViewDashboard && onViewDashboard()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                >
-                  Ver Dashboard
-                </button>
-              </div>
-            </div>
-          )}
-          
           <FinancialQuestionnaire onComplete={handleQuestionnaireComplete} />
         </div>
       );
@@ -160,53 +139,7 @@ export const SetupWizard = ({ onComplete, onViewDashboard, onBackToWizard }) => 
         />
       );
 
-    case 'dashboard':
-      return (
-        <div className="space-y-6">
-          <SimpleDashboard
-            questionnaireData={questionnaireData}
-            extractData={extractData}
-            onAnalysisComplete={() => {
-              console.log('✅ Pipeline de aconselhamento concluída, redirecionando para dashboard...');
-              if (onViewDashboard) {
-                onViewDashboard();
-              }
-            }}
-            onBackToHome={() => {
-              console.log('🏠 Voltando para tela inicial...');
-              if (onBackToWizard) {
-                onBackToWizard();
-              } else {
-                setCurrentStep('questionnaire');
-              }
-            }}
-          />
-          
-          {/* Botões de ação após configuração inicial */}
-          <div className="flex justify-center space-x-4 mt-8 p-6 bg-gray-50 rounded-lg">
-            <button
-              onClick={() => onViewDashboard && onViewDashboard()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Ver Dashboard Completo
-            </button>
-            <button
-              onClick={() => setCurrentStep('questionnaire')}
-              className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-            >
-              Editar Perfil
-            </button>
-            <button
-              onClick={() => setCurrentStep('upload')}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-            >
-              Enviar Novo Extrato
-            </button>
-          </div>
-        </div>
-      );
-
     default:
-      return <SimpleDashboard onBackToHome={() => setCurrentStep('questionnaire')} />;
+      return <FinancialQuestionnaire onComplete={handleQuestionnaireComplete} />;
   }
 };

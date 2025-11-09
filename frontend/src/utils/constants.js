@@ -8,6 +8,11 @@ export const RISK_PROFILES = [
   { value: 'agressivo', label: 'Agressivo' }
 ];
 
+export const MENSALIDADE_FACULDADE = [
+  { value: 'possui', label: 'Sim, possui ' },
+  { value: 'nao_possui', label: 'Não possui' }
+];
+
 // export const INVESTMENT_EXPERIENCE = [
 //   { value: 'iniciante', label: 'Iniciante' },
 //   { value: 'intermediario', label: 'Intermediário' },
@@ -25,7 +30,7 @@ export const MEIOS_TRANSPORTE = [
 
 export const DEPENDENTES = [
   { value: 'pet', label: 'Animal de Estimação' },
-  { value: 'filho', label: 'Filho(s)' },
+  { value: 'filho', label: 'Filho(a)' },
   { value: 'parentes', label: 'Parentes' },
   { value: 'nenhum', label: 'Nenhum' }
 ];
@@ -40,5 +45,5 @@ export const FINANCIAL_GOALS = [
 export const NAVIGATION_TABS = [
   { id: 'overview', label: 'Aconselhamento', icon: 'TrendingUp' },
   { id: 'advice', label: 'Histórico', icon: 'Brain' },
-  { id: 'comparison', label: 'Comparação LLMs', icon: 'FileText' }
+  // { id: 'comparison', label: 'Comparação LLMs', icon: 'FileText' }
 ];

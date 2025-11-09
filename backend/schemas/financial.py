@@ -19,6 +19,9 @@ class QuestionnaireData(BaseModel):
     risk_profile: str
     transportation_methods: str
     dependents: List[Dependent]  # Lista de dependentes
+    mensalidade_faculdade: str  # "sim" ou "nao"
+    valor_mensalidade: Optional[str] = None  # Valor da mensalidade (se mensalidade_faculdade for "sim")
+
 
 class FinancialProfileCreate(BaseModel):
     questionnaire_data: QuestionnaireData

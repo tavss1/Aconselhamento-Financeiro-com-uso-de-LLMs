@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RISK_PROFILES, FINANCIAL_GOALS, MEIOS_TRANSPORTE, DEPENDENTES } from '../../utils/constants';
+import { MENSALIDADE_FACULDADE, RISK_PROFILES, FINANCIAL_GOALS, MEIOS_TRANSPORTE, DEPENDENTES } from '../../utils/constants';
 
 export const FinancialQuestionnaire = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -10,6 +10,8 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
     risk_profile: '',
     transportation_methods: '',
     financial_goal: '',
+    mensalidade_faculdade: '',
+    valor_mensalidade: '',
     financial_goal_details: {
       target_amount: '',
       time_frame: ''
@@ -35,6 +37,18 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
           options: RISK_PROFILES,
           required: true
         },
+      ]
+    },
+    {
+      title: 'Mensalidade da Faculdade',
+      fields: [
+        {
+          name: 'mensalidade_faculdade',
+          label: 'Sua faculdade possui mensalidade?',
+          type: 'select',
+          options: MENSALIDADE_FACULDADE,
+          required: true
+        }
       ]
     },
     {
@@ -106,6 +120,14 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
       }
     });
 
+    // Validação especial para valor da mensalidade quando "Possuo" é selecionado
+    if (formData.mensalidade_faculdade === 'possui') {
+      if (!formData.valor_mensalidade || formData.valor_mensalidade === '') {
+        errors.valor_mensalidade = 'Valor da mensalidade é obrigatório';
+        isValid = false;
+      }
+    }
+
     setValidationErrors(errors);
     return isValid;
   };
@@ -121,7 +143,7 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
       setValidationErrors({});
     } else {
       // Verificar campos obrigatórios antes de processar
-      const requiredFields = ['age', 'monthly_income', 'transportation_methods', 'dependents', 'financial_goal'];
+      const requiredFields = ['age', 'monthly_income', 'mensalidade_faculdade', 'transportation_methods', 'dependents', 'financial_goal'];
       const missingFields = [];
       
       requiredFields.forEach(field => {
@@ -136,6 +158,13 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
           missingFields.push(field);
         }
       });
+
+      // Validação especial para valor da mensalidade quando "Possuo" é selecionado
+      if (formData.mensalidade_faculdade === 'possui') {
+        if (!formData.valor_mensalidade || formData.valor_mensalidade === '') {
+          missingFields.push('valor_mensalidade');
+        }
+      }
       
       if (missingFields.length > 0) {
         console.error('❌ Campos obrigatórios faltando:', missingFields);
@@ -153,7 +182,9 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
         monthly_income: rawData.monthly_income,
         dependents: rawData.dependents || [],
         risk_profile: rawData.risk_profile,
-        transportation_methods: rawData.transportation_methods
+        transportation_methods: rawData.transportation_methods,
+        mensalidade_faculdade: rawData.mensalidade_faculdade,
+        valor_mensalidade: rawData.mensalidade_faculdade === 'possui' ? rawData.valor_mensalidade : null
       };
 
       // Mapear objective_data para os nomes esperados pela API (em inglês)
@@ -167,11 +198,6 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
         objective_data
       };
 
-      console.log('📋 Dados brutos do formData:', formData);
-      console.log('🔄 Dados processados para API:', processedData);
-      console.log('✅ questionnaire_data:', questionnaire_data);
-      console.log('🎯 objective_data:', objective_data);
-      
       onComplete(processedData);
     }
   };
@@ -209,6 +235,11 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
                   });
                 }
 
+                // Se for mensalidade da faculdade e selecionar "Não possuo", limpar o valor
+                if (field.name === 'mensalidade_faculdade' && e.target.value === 'nao_possui') {
+                  updateFormData('valor_mensalidade', '');
+                }
+
                 // Limpa erro quando usuário interage com o campo
                 if (validationErrors[field.name]) {
                   setValidationErrors(prev => {
@@ -234,15 +265,15 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
 
             {/* Campos de valor e prazo para objetivos financeiros */}
             {field.name === 'financial_goal' && formData[field.name] && (
-              <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                <h4 className="text-sm font-medium text-green-800 mb-3">
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="text-sm font-medium text-blue-800 mb-3">
                   Detalhes do objetivo selecionado:
                 </h4>
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm text-green-700 mb-1">
-                      Valor desejado (R$) - opcional:
+                    <label className="block text-sm text-blue-700 mb-1">
+                      Valor desejado (R$):
                     </label>
                     <input
                       type="number"
@@ -256,13 +287,13 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
                           target_amount: e.target.value
                         });
                       }}
-                      className="w-full px-3 py-2 text-sm border border-green-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 text-sm border border-blue-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm text-green-700 mb-1">
-                      Prazo para conclusão - opcional:
+                    <label className="block text-sm text-blue-700 mb-1">
+                      Prazo para conclusão:
                     </label>
                     <input
                       type="text"
@@ -274,10 +305,48 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
                           time_frame: e.target.value
                         });
                       }}
-                      className="w-full px-3 py-2 text-sm border border-green-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 text-sm border border-blue-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Campo de valor da mensalidade para faculdade */}
+            {field.name === 'mensalidade_faculdade' && formData[field.name] === 'possui' && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="block text-sm font-medium text-blue-800 mb-2">
+                  Valor da Mensalidade (R$) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Ex: 800.00"
+                  value={formData.valor_mensalidade || ''}
+                  onChange={(e) => {
+                    updateFormData('valor_mensalidade', e.target.value);
+                    // Limpa erro quando usuário interage com o campo
+                    if (validationErrors.valor_mensalidade) {
+                      setValidationErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.valor_mensalidade;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  className={`w-full px-3 py-2 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+                    validationErrors.valor_mensalidade
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-blue-300'
+                  }`}
+                  required
+                />
+                {validationErrors.valor_mensalidade && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {validationErrors.valor_mensalidade}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -438,9 +507,9 @@ export const FinancialQuestionnaire = ({ onComplete }) => {
 
               {/* Resumo do objetivo financeiro selecionado */}
               {field.name === 'financial_goal' && formData.financial_goal && (
-                <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                  <h4 className="text-sm font-medium text-green-800 mb-2">Resumo do objetivo:</h4>
-                  <div className="text-sm text-green-700">
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <h4 className="text-sm font-medium text-blue-800 mb-2">Resumo do objetivo:</h4>
+                  <div className="text-sm text-blue-700">
                     {(() => {
                       const option = FINANCIAL_GOALS.find(g => g.value === formData.financial_goal);
                       const details = formData.financial_goal_details;

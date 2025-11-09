@@ -106,20 +106,32 @@ class LocalLLMClient:
         if "{prompt}" not in self.cmd_template:
             raise JSONableError("cmd_template deve conter {prompt}")
 
-        #cmd = self.cmd_template.format(prompt=shlex.quote(prompt), model=model)
-        cmd = self.cmd_template.format(prompt=f'"{prompt}"', model=model)
+        # Escapar o prompt adequadamente para Windows
+        escaped_prompt = prompt.replace('"', '\\"').replace('\n', '\\n')
+        cmd = self.cmd_template.format(prompt=f'"{escaped_prompt}"', model=model)
         print(f"\n[DEBUG] Executando comando LLM:\n{cmd}\n")
 
         try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=self.timeout, encoding="utf-8", errors="replace")
+            # Forçar codificação UTF-8 no Windows
+            proc = subprocess.run(
+                cmd, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=self.timeout,
+                encoding='utf-8',
+                errors='replace'
+            )
         except subprocess.TimeoutExpired:
             raise JSONableError("Local LLM timed out")
 
         if proc.returncode != 0:
-            raise JSONableError(f"Local LLM failed: {proc.stderr.strip()}")
+            error_msg = proc.stderr.strip() if proc.stderr else "Erro desconhecido"
+            raise JSONableError(f"Local LLM failed: {error_msg}")
 
-        print(f"[DEBUG] Saída bruta do modelo (primeiros 300 chars):\n{proc.stdout[:300]}\n")
-        return proc.stdout.strip()
+        output = proc.stdout.strip()
+        print(f"[DEBUG] Saída bruta do modelo (primeiros 300 chars):\n{output[:300]}\n")
+        return output
 
 # ----------------------------------------------------------------------------
 # Database Access Integration
@@ -307,14 +319,13 @@ CATEGORY_MAP = {
 
 DEFAULT_COLUMNS_CANDIDATES = {
     "date": ["data", "date", "dt", "data_lancamento"],
-    "desc": ["descricao", "Descrição","historico", "description", "detalhe", "descrição", "title"],
+    "desc": ["descricao", "descrição", "description", "historico", "detalhe", "title"],
     "amount": ["valor", "amount", "vl", "montante"],
 }
 
 # ======== CACHE E CONFIGURAÇÕES PARA CATEGORIZAÇÃO AVANÇADA ========
 CACHE_PATH = "categorias_cache.pkl"
 BLOCO_TAMANHO = 10
-OLLAMA_MODEL_DEFAULT = "gemma3"
 
 def load_cache(path: str) -> dict:
     """Carrega cache de categorias do disco."""
@@ -472,6 +483,7 @@ class BankStatementParserTool(BaseTool):
              ollama_model: str = "gemma3", block_size: int = 10) -> str:
         try:
             print(f"🔍 DEBUG - Iniciando processamento do arquivo: {file_path}")
+            print(f"🔍 DEBUG - BankStatementParserTool usando modelo: {ollama_model}")
             print(f"🔍 DEBUG - Parâmetros: llm_enhanced={llm_enhanced}, method={categorization_method}")
             
             ext = pathlib.Path(file_path).suffix.lower()
@@ -502,20 +514,29 @@ class BankStatementParserTool(BaseTool):
             df_non_expenses = df[df["valor"] >= 0].copy()
             
             if already_categorized == False:
+                print(f"🔍 DEBUG - Iniciando categorização com método: {categorization_method}")
+                print(f"🔍 DEBUG - Despesas para categorizar: {len(df_expenses)}")
+                
                 # Categorizar apenas despesas
                 if categorization_method == "ollama":
+                    print(f"🔍 DEBUG - Usando categorização Ollama com modelo: {ollama_model}")
                     df_expenses = self._categorize_with_ollama(df_expenses, ollama_model, block_size)
+                    print(f"🔍 DEBUG - Categorização Ollama concluída")
                 else:
+                    print(f"🔍 DEBUG - Usando categorização regex")
                     df_expenses["categoria"] = df_expenses["descricao"].apply(self._categorize)
                     
                     if llm_enhanced:
                         try:
-                            df_expenses = self._refine_categories_with_llm(df_expenses)
+                            df_expenses = self._refine_categories_with_llm(df_expenses, model=ollama_model)
                         except Exception:
                             pass
             
                 # Categorizar não-despesas como "Renda" (receitas/transferências recebidas)
                 df_non_expenses["categoria"] = "Renda"
+                print(f"🔍 DEBUG - Receitas categorizadas como 'Renda': {len(df_non_expenses)}")
+            else:
+                print(f"🔍 DEBUG - Transações já categorizadas, pulando categorização")
             
             # Recombinar DataFrames (sempre executar)
             df_categorized = pd.concat([df_expenses, df_non_expenses], ignore_index=True)
@@ -599,11 +620,14 @@ class BankStatementParserTool(BaseTool):
 
     def _normalize_columns(self, df):
         """Normaliza nomes de colunas e valores monetários."""
+        
         cols = {c.lower().strip(): c for c in df.columns}
+        print(f"🔍 DEBUG - Mapeamento de colunas: {cols}")
         
         def find_col(cands):
             for alias in cands:
                 if alias in cols:
+                    print(f"🔍 DEBUG - Encontrada coluna '{alias}' -> '{cols[alias]}'")
                     return cols[alias]
             return None
         
@@ -611,7 +635,12 @@ class BankStatementParserTool(BaseTool):
         c_desc = find_col(DEFAULT_COLUMNS_CANDIDATES["desc"]) or list(df.columns)[1]
         c_amt = find_col(DEFAULT_COLUMNS_CANDIDATES["amount"]) or list(df.columns)[2]
         
+        print(f"🔍 DEBUG - Colunas detectadas: data='{c_date}', desc='{c_desc}', valor='{c_amt}'")
+        
         out = df.rename(columns={c_date: "data", c_desc: "descricao", c_amt: "valor"}).copy()
+        print(f"🔍 DEBUG - Após normalização: {list(out.columns)}")
+        print(f"🔍 DEBUG - Número de linhas: {len(out)}")
+        print(f"🔍 DEBUG - Primeira linha: {out.iloc[0].to_dict() if len(out) > 0 else 'VAZIO'}")
         
         # Normalização de valores monetários
         def normalize_monetary_value(val):
@@ -667,9 +696,9 @@ class BankStatementParserTool(BaseTool):
                 return cat
         return "Outros"
 
-    def _categorize_with_ollama(self, df, model_name: str = "gemma3", block_size: int = 10):
+    def _categorize_with_ollama(self, df, ollama_model: str = "gemma3", block_size: int = 10):
         """Categoriza transações usando Ollama - apenas despesas."""
-        print(f"[INFO] Iniciando categorização com Ollama (modelo: {model_name})")
+        print(f"[INFO] Iniciando categorização com Ollama (modelo: {ollama_model})")
 
         if ChatOllama is None:
             print("[ERROR] ChatOllama não está disponível")
@@ -677,8 +706,8 @@ class BankStatementParserTool(BaseTool):
             return self._categorize_with_regex_fallback(df)
 
         try:
-            llm = ChatOllama(model=model_name, temperature=0.1)
-            print(f"[INFO] Modelo Ollama '{model_name}' inicializado com sucesso")
+            llm = ChatOllama(model=ollama_model, temperature=0.2)
+            print(f"[INFO] Modelo Ollama '{ollama_model}' inicializado com sucesso")
         except Exception as e:
             print(f"[ERROR] Falha ao inicializar Ollama: {e}")
             print("[INFO] Usando fallback para categorização regex")
@@ -773,9 +802,13 @@ class BankStatementParserTool(BaseTool):
         df_copy["categoria"] = df_copy["descricao"].apply(self._categorize)
         return df_copy
 
-    def _refine_categories_with_llm(self, df):
+    def _refine_categories_with_llm(self, df, model: Optional[str] = None):
         """Refina categorias com LLM local."""
         client = LocalLLMClient()
+        model = model or "gemma3"
+        
+        print(f"🔍 DEBUG - _refine_categories_with_llm usando modelo: {model}")
+        
         uniq = df["descricao"].dropna().astype(str).str.slice(0, 80).unique().tolist()[:100]
         prompt = (
             "Você é um classificador de gastos. Mapeie cada descrição para UMA categoria entre: "
@@ -784,7 +817,7 @@ class BankStatementParserTool(BaseTool):
             f"Descrições:\n- " + "\n- ".join(uniq)
         )
         try:
-            raw = client.generate(prompt)
+            raw = client.generate(prompt, model=model)
             data = json.loads(raw)
             mapping = {m.get("descricao", "").lower(): m.get("categoria", "Outros") for m in data.get("mappings", [])}
             df["categoria"] = df["descricao"].astype(str).str.lower().map(mapping).fillna(df["categoria"])
@@ -803,7 +836,7 @@ class FinancialAdvisorToolSchema(BaseModel):
     # Usar Union para aceitar múltiplos tipos explicitamente
     profile_json: Union[str, dict, list] = Field(description="JSON (string ou objeto) do UserProfileBuilderTool")
     transactions_json: Union[str, dict, list] = Field(description="JSON (string, dict ou lista) do BankStatementParserTool com transações categorizadas. OBRIGATÓRIO.")
-    model: Optional[str] = Field(default="gemma3", description="Local model identifier to use")
+    ollama_model: Optional[str] = Field(default="gemma3", description="Modelo LLM selecionado no frontend (ex: gemma3, llama2, mistral)")
 
 # Rebuild do modelo para resolver referências
 FinancialAdvisorToolSchema.model_rebuild()
@@ -821,28 +854,30 @@ class FinancialAdvisorTool(BaseTool):
         "RETORNE APENAS JSON NO FORMATO EXATO ABAIXO. NÃO ADICIONE TEXTO EXTRA. NÃO RETORNE CAMPOS 'status', 'response' OU 'resposta'.\n"
         "IMPORTANTE: 'plano' deve ter ARRAYS com exatamente 3 itens cada:\n"
         "{\n"
-        '  "resumo": "Análise da situação financeira do usuário",\n'
-        '  "alertas": ["Alerta crítico 1", "Alerta crítico 2"],\n'
+        '  "resumo": "Análise da situação financeira",\n'
+        '  "alertas": ["Alerta 1", "Alerta 2", "Alerta 3"],\n'
         '  "plano": {\n'
         '    "agora": ["Ação 1", "Ação 2", "Ação 3"],\n'
         '    "30_dias": ["Meta 1", "Meta 2", "Meta 3"],\n'
         '    "12_meses": ["Objetivo 1", "Objetivo 2", "Objetivo 3"]\n'
         '  },\n'
         '  "metas_mensuraveis": [\n'
-        '    {"meta": "Descrição da meta", "kpi": "Indicador", "meta_num": 1000, "prazo_meses": 12}\n'
+        '    {"meta": "Descrição específica da meta", "kpi": "Indicador de medição", "meta_num": 1000, "prazo_meses": 6},\n'
+        '    {"meta": "Segunda meta específica", "kpi": "Segundo indicador", "meta_num": 500, "prazo_meses": 12}\n'
         '  ]\n'
         "}\n"
         "CRUCIAL: SEMPRE use ARRAYS (listas) para agora, 30_dias e 12_meses, NUNCA strings únicas.\n"
         "ANÁLISE OS DADOS FINANCEIROS E RESPONDA APENAS JSON:"
     )
 
-    def _run(self, profile_json: Any, transactions_json: Any, model: Optional[str] = None) -> str:
-        """Executa o plano de aconselhamento financeiro com perfil e transações completos."""
+    def _run(self, profile_json: Any, transactions_json: Any, ollama_model: Optional[str] = None) -> str:
+        """Gera conselhos financeiros personalizados usando LLM local."""
         from datetime import datetime
         import json
 
         client = LocalLLMClient()
-        model = model or "gemma3"
+        
+        print(f"🔍 DEBUG - FinancialAdvisorTool usando modelo: {ollama_model}")
 
         # --- Parse seguro do perfil ---
         try:
@@ -922,7 +957,7 @@ class FinancialAdvisorTool(BaseTool):
         print(f"🔍 DEBUG FinancialAdvisorTool - Contexto enviado: {json.dumps(context, ensure_ascii=False, indent=2)}")
 
         try:
-            raw = client.generate(prompt, model=model).strip()
+            raw = client.generate(prompt, model=ollama_model).strip()
             print(f"🔍 DEBUG FinancialAdvisorTool - Resposta raw do LLM: {raw}")
 
             if not raw or raw.strip() == "":
@@ -955,7 +990,7 @@ class FinancialAdvisorTool(BaseTool):
                 "timestamp": datetime.now().isoformat(),
                 "advice": advice
             }, ensure_ascii=False)
-
+            
         except Exception as e:
             print(f"[WARNING] FinancialAdvisorTool: erro com LLM, usando fallback heurístico: {e}")
             # Fallback heurístico completo em caso de falha do LLM
@@ -1145,6 +1180,7 @@ class ModelEvaluatorToolSchema(BaseModel):
     advices_json: str = Field(description="JSON list with entries: {model: str, advice_json: {..}} or {model, text}")
     profile_json: Optional[str] = Field(default=None, description="Profile JSON to provide context to the judge")
     use_llm_judge: bool = Field(default=True, description="If True, use LLM-as-a-judge; else use heuristics only")
+    judge_model: Optional[str] = Field(default="gemma3", description="Modelo LLM para avaliação dos conselhos")
 
 class ModelEvaluatorTool(BaseTool):
     name: str = "ModelEvaluator"
@@ -1154,7 +1190,7 @@ class ModelEvaluatorTool(BaseTool):
     )
     args_schema = ModelEvaluatorToolSchema
 
-    def _run(self, advices_json: str, profile_json: Optional[str] = None, use_llm_judge: bool = True) -> str:
+    def _run(self, advices_json: str, profile_json: Optional[str] = None, use_llm_judge: bool = True, judge_model: Optional[str] = None) -> str:
         try:
             items = json.loads(advices_json)
             profile = json.loads(profile_json) if profile_json else None
@@ -1174,7 +1210,7 @@ class ModelEvaluatorTool(BaseTool):
         scores = []
         if use_llm_judge:
             try:
-                scores = self._judge_with_llm(normalized, profile)
+                scores = self._judge_with_llm(normalized, profile, judge_model=judge_model)
             except Exception:
                 scores = self._heuristic_scores(normalized)
         else:
@@ -1187,8 +1223,12 @@ class ModelEvaluatorTool(BaseTool):
         out = {"ok": True, "timestamp": _now_iso(), "rubric": EVAL_RUBRIC, "scores": scores, "winner": winner}
         return json.dumps(out, ensure_ascii=False)
 
-    def _judge_with_llm(self, pairs: List[Tuple[str, str]], profile: Optional[dict]) -> List[Dict[str, Any]]:
+    def _judge_with_llm(self, pairs: List[Tuple[str, str]], profile: Optional[dict], judge_model: Optional[str] = None) -> List[Dict[str, Any]]:
         client = LocalLLMClient()
+        judge_model = judge_model or "gemma3"
+        
+        print(f"🔍 DEBUG - _judge_with_llm usando modelo avaliador: {judge_model}")
+        
         blocks = []
         for model, text in pairs:
             prompt = (
@@ -1197,7 +1237,7 @@ class ModelEvaluatorTool(BaseTool):
                 f"Perfil (se houver): {json.dumps(profile, ensure_ascii=False)}\n\n"
                 f"Conselho do modelo {model}:\n{text}\n"
             )
-            raw = client.generate(prompt)
+            raw = client.generate(prompt, model=judge_model)
             data = json.loads(_extract_json(raw))
             data["model"] = model
             blocks.append(data)
@@ -1489,7 +1529,8 @@ class DashboardDataCompilerTool(BaseTool):
                     "data_version": "v1.0",
                     "frontend_compatibility": "react_v18+",
                     "total_data_points": len(transactions.get("transacoes", [])),
-                    "analysis_period": self._get_analysis_period(transactions)
+                    "analysis_period": self._get_analysis_period(transactions),
+                    "risk_profile": self._extract_risk_profile(transactions, advice)
                 },
                 "transactions_analysis": transactions_analysis,
                 "financial_advice": financial_advice,
@@ -1568,7 +1609,13 @@ class DashboardDataCompilerTool(BaseTool):
     
     def _build_financial_advice(self, advice: dict, transactions: dict) -> dict:
         """Estrutura conselhos financeiros por timeline"""
-        advice_data = advice.get("advice", {})
+        # Detectar estrutura: nova (direta) ou antiga (com wrapper "advice")
+        if "plano" in advice:
+            # Estrutura nova: dados diretos
+            advice_data = advice
+        else:
+            # Estrutura antiga: dados dentro de "advice"
+            advice_data = advice.get("advice", {})
         
         # Calcular métricas básicas das transações
         categories = transactions.get("totais_por_categoria", [])
@@ -1797,16 +1844,31 @@ class DashboardDataCompilerTool(BaseTool):
         }
         return icons.get(category, "question")
     
-    def _extract_timeline_advice(self, advice_list: list) -> list:
+    def _extract_timeline_advice(self, advice_data) -> list:
         structured_advice = []
-        for i, advice in enumerate(advice_list[:5]):
-            structured_advice.append({
-                "id": f"advice_{i+1}",
-                "title": advice[:50] + "..." if len(advice) > 50 else advice,
-                "description": advice,
-                "impact": "medium",
-                "effort": "medium"
-            })
+        
+        # Se for uma string simples, criar um item único
+        if isinstance(advice_data, str):
+            if advice_data.strip():  # Só processar se não for vazio
+                structured_advice.append({
+                    "id": "advice_1",
+                    "title": advice_data[:50] + "..." if len(advice_data) > 50 else advice_data,
+                    "description": advice_data,
+                    "impact": "medium",
+                    "effort": "medium"
+                })
+        # Se for uma lista, processar cada item
+        elif isinstance(advice_data, list):
+            for i, advice in enumerate(advice_data[:5]):
+                if isinstance(advice, str) and advice.strip():
+                    structured_advice.append({
+                        "id": f"advice_{i+1}",
+                        "title": advice[:50] + "..." if len(advice) > 50 else advice,
+                        "description": advice,
+                        "impact": "medium",
+                        "effort": "medium"
+                    })
+        
         return structured_advice
     
     def _get_top_transactions(self, transactions: list) -> list:
@@ -1825,6 +1887,25 @@ class DashboardDataCompilerTool(BaseTool):
     
     def _get_analysis_period(self, transactions: dict) -> str:
         return transactions.get("timestamp", "")[:7] if transactions.get("timestamp") else ""
+    
+    def _extract_risk_profile(self, transactions: dict, advice: dict) -> str:
+        """Extrai o perfil de risco dos dados disponíveis"""
+        # Tentar extrair do advice primeiro (estrutura nova)
+        if "plano" in advice:
+            advice_data = advice
+        else:
+            advice_data = advice.get("advice", {})
+        
+        # Procurar em campos comuns onde o perfil de risco pode estar
+        risk_profile = (
+            advice_data.get("risk_profile") or
+            advice_data.get("perfil_risco") or
+            transactions.get("risk_profile") or
+            transactions.get("perfil_risco") or
+            "moderado"  # valor padrão
+        )
+        
+        return risk_profile
 
 # ----------------------------------------------------------------------------
 # OPTIONAL: minimal registry that CrewAI can import

@@ -39,11 +39,6 @@ os.environ["OPENAI_API_KEY"] = "dummy"
 os.environ["CREWAI_LLM_PROVIDER"] = "ollama"
 os.environ["CREWAI_USE_LOCAL_LLM_ONLY"] = "true"
 
-# Configuração do LLM para agentes
-llm = LLM(
-    model="ollama/gemma3",
-    base_url="http://localhost:11434"
-)
 
 app = FastAPI(
     title="Aconselhamento Financeiro com LLMs API - CrewAI Integration",
@@ -106,7 +101,10 @@ class UserProfileBuilderTool(BaseTool):
             risk_profile = user_data.get("risk_profile")
             
             transportation_methods = user_data.get("transportation_methods", "")
-            
+
+            mensalidade_faculdade = user_data.get("mensalidade_faculdade")
+            valor_mensalidade = user_data.get("valor_mensalidade", 0)
+
             if not user_data.get("financial_goal"):
                 raise ValueError("Objetivo financeiro é obrigatório")
             financial_goal = user_data.get("financial_goal")
@@ -123,6 +121,7 @@ class UserProfileBuilderTool(BaseTool):
             if not user_data.get("user_id"):
                 raise ValueError("ID do usuário é obrigatório")
             
+            #todo adicionar campo de mensalidade
             perfil = {
                 "ok": True,
                 "timestamp": datetime.now().isoformat(),
@@ -135,6 +134,8 @@ class UserProfileBuilderTool(BaseTool):
                     "detalhes_dependentes": dependents,
                     "risk_profile": risk_profile,
                     "transportation_methods": transportation_methods,
+                    "mensalidade_faculdade": mensalidade_faculdade,
+                    "valor_mensalidade": valor_mensalidade,
                 },
                 "objetivo": {
                     "descricao": financial_goal,
@@ -151,10 +152,15 @@ class UserProfileBuilderTool(BaseTool):
 class FinancialAdvisorCrew:
     """Crew de aconselhamento financeiro para API integrada."""
     
-    def __init__(self, user_data: Dict[str, Any]):
+    def __init__(self, user_data: Dict[str, Any], selected_model: str):
         self.user_data = user_data
         self.user_data_json = json.dumps(user_data, ensure_ascii=False)
-    
+        self.selected_model = selected_model
+        self.llm=LLM(
+            model=f"ollama/{selected_model}",
+            base_url="http://localhost:11434"
+        )
+
     def create_data_extractor_agent(self) -> Agent:
         """Cria agente extrator de dados financeiros."""
         return Agent(
@@ -166,7 +172,7 @@ class FinancialAdvisorCrew:
                 "Seu trabalho é a base para que o consultor financeiro possa gerar conselhos personalizados."
             ),
             verbose=True,
-            llm=llm,
+            llm=self.llm,
             tools=[BankStatementParserTool()],
             memory=True,
             allow_delegation=False,
@@ -185,25 +191,26 @@ class FinancialAdvisorCrew:
                 "similares. Sua única ação válida é 'FinancialAdvisor'."
             ),
             verbose=True,
-            llm=llm,
+            llm=self.llm,
             tools=[FinancialAdvisorTool()],
             allow_delegation=False,
             memory=False,
             max_iter=1
         )
-    
-    def create_extract_task(self, agent: Agent, csv_file_path: str, categorization_method: str = "ollama") -> Task:
+
+    def create_extract_task(self, agent: Agent, csv_file_path: str, categorization_method: str = "ollama", selected_model: str = "gemma3") -> Task:
         """Cria task de extração de dados."""
         return Task(
             description=f"""
-            Você deve processar o extrato bancário diretamente usando a ferramenta BankStatementParserTool.
-
+            IMPORTANTE: Você deve processar o extrato bancário diretamente usando a ferramenta BankStatementParserTool E RETORNAR.
+            EXATAMENTE a saída JSON da ferramenta, sem interpretação ou reformatação.
+            
             Action: BankStatementParserTool
             Action Input: {{
             "file_path": "{csv_file_path}",
             "llm_enhanced": false,
             "categorization_method": "{categorization_method}",
-            "ollama_model": "gemma3",
+            "ollama_model": "{selected_model}",
             "block_size": 10
             }}
             Retorne APENAS o JSON gerado pela ferramenta como resultado final.
@@ -217,10 +224,10 @@ class FinancialAdvisorCrew:
             - timestamp: data/hora do processamento
             """,
             agent=agent,
-            llm=llm
+            llm=self.llm
         )
-    
-    def create_advice_task(self, agent: Agent, profile_json: str, transactions_json: str) -> Task:
+
+    def create_advice_task(self, agent: Agent, profile_json: str, transactions_json: str, selected_model: str = "gemma3") -> Task:
         """Cria task de geração de conselhos."""
         try:
             profile_data = json.loads(profile_json)
@@ -251,7 +258,7 @@ class FinancialAdvisorCrew:
             Action Input: {{
                 "profile_json": "{escaped_profile_json}",
                 "transactions_json": "{{json.dumps(context[extract_task])}}",
-                "model": "gemma3"
+                "ollama_model": "{selected_model}",
             }}
 
             INSTRUÇÕES CRÍTICAS:
@@ -274,11 +281,11 @@ class FinancialAdvisorCrew:
             expected_output="JSON válido contendo campos: resumo, alertas, plano, metas_mensuraveis.",
             agent=agent,
             tools=[FinancialAdvisorTool()],
-            llm=llm,
+            llm=self.llm,
             max_iter=1
         )
     
-    def create_advice_task_with_data(self, agent: Agent, profile_json: str, transactions_json: str) -> Task:
+    def create_advice_task_with_data(self, agent: Agent, profile_json: str, transactions_json: str, selected_model: str = "gemma3") -> Task:
         """Cria task de geração de conselhos com dados explícitos."""
         try:
             profile_data = json.loads(profile_json)
@@ -309,7 +316,7 @@ class FinancialAdvisorCrew:
             Action Input: {{
                 "profile_json": "{escaped_profile_json}",
                 "transactions_json": "{escaped_transactions_json}",
-                "model": "gemma3"
+                "ollama_model": "{selected_model}"
             }}
 
             Os dados já estão prontos e válidos. Não modifique os JSONs fornecidos.
@@ -325,7 +332,7 @@ class FinancialAdvisorCrew:
             expected_output="JSON válido contendo campos: resumo, alertas, plano, metas_mensuraveis.",
             agent=agent,
             tools=[FinancialAdvisorTool()],
-            llm=llm,
+            llm=self.llm,
             max_iter=1
         )
     
@@ -368,9 +375,9 @@ class FinancialAdvisorCrew:
         # Verificar diferentes estruturas de categoria
         if "totais_por_categoria" in extract_data:
             normalized["totais_por_categoria"] = extract_data["totais_por_categoria"]
-        elif "transaction_summary" in extract_data:
+        elif "transaction_summary" in extract_data or "expenses_by_category" in extract_data or "revenues" in extract_data:
             # Estrutura alternativa: transaction_summary.categories
-            summary = extract_data["transaction_summary"]
+            summary = extract_data.get("transaction_summary") or extract_data.get("expenses_by_category") or extract_data.get("revenues")
             if isinstance(summary, dict) and "categories" in summary:
                 categories = summary["categories"]
                 if isinstance(categories, list):
@@ -400,10 +407,12 @@ class FinancialAdvisorCrew:
         
         return normalized
 
-    async def run_analysis(self, csv_file_path: str, categorization_method: str = "ollama") -> Dict[str, Any]:
+    async def run_analysis(self, csv_file_path: str, categorization_method: str = "ollama", selected_model: str = "gemma3") -> Dict[str, Any]:
         """Executa análise financeira completa de forma assíncrona."""
         try:
             print(f"🚀 DEBUG - Iniciando run_analysis com user_data: {self.user_data}")
+            print(f"🎯 DEBUG - run_analysis iniciado com modelo: {selected_model}")
+            print(f"🎯 DEBUG - Método de categorização: {categorization_method}")
             
             # ETAPA 1: Construir perfil
             profile_tool = UserProfileBuilderTool()
@@ -425,7 +434,8 @@ class FinancialAdvisorCrew:
             extract_task = self.create_extract_task(
                 agent=data_extractor,
                 csv_file_path=csv_file_path,
-                categorization_method=categorization_method
+                categorization_method=categorization_method,
+                selected_model=selected_model
             )
 
             print(f"🚀 DEBUG - Executando extract_task...")
@@ -435,7 +445,7 @@ class FinancialAdvisorCrew:
                 agents=[data_extractor],
                 tasks=[extract_task],
                 process=Process.sequential,
-                llm=llm,
+                llm=self.llm,
                 memory=False,
                 verbose=True
             )
@@ -498,7 +508,8 @@ class FinancialAdvisorCrew:
             advice_task = self.create_advice_task_with_data(
                 agent=financial_advisor,
                 profile_json=profile_min,
-                transactions_json=extract_data_str
+                transactions_json=extract_data_str,
+                selected_model=selected_model
             )
 
             # Executar advice_task
@@ -506,7 +517,7 @@ class FinancialAdvisorCrew:
                 agents=[financial_advisor],
                 tasks=[advice_task],
                 process=Process.sequential,
-                llm=llm,
+                llm=self.llm,
                 memory=False,
                 verbose=True
             )
@@ -545,7 +556,7 @@ class FinancialAdvisorCrew:
                     evaluation_json=json.dumps({
                         "ok": True,
                         "message": "LLM local executado com sucesso",
-                        "model_used": "ollama/gemma3"
+                        "model_used": "ollama/" + selected_model,
                     })
                 )
                 
@@ -576,7 +587,7 @@ class FinancialAdvisorCrew:
                 "metadata": {
                     "csv_file": csv_file_path,
                     "user_data": self.user_data,
-                    "llm_model": "ollama/gemma3",
+                    "llm_model": "ollama/" + selected_model,
                     "flow_completed": True
                 }
             }
@@ -620,7 +631,7 @@ def save_llm_response_to_db(
         score_metrics = {
             "overall_success": crew_results.get("success", False),
             "execution_timestamp": crew_results.get("timestamp"),
-            "llm_model": crew_results.get("metadata", {}).get("llm_model", "ollama/gemma3"),
+            "llm_model": crew_results.get("metadata", {}).get("llm_model"),
             "data_quality": {
                 "transactions": {
                     "success": bool(transactions_data.get("ok")),
@@ -663,7 +674,7 @@ def save_llm_response_to_db(
         }
         
         # Determinar modelo de IA usado
-        modelo_ia = crew_results.get("metadata", {}).get("llm_model", "ollama/gemma3")
+        modelo_ia = crew_results.get("metadata", {}).get("llm_model")
         
         # Criar entrada na tabela llm_responses com a nova estrutura
         llm_response_entry = LLMResponse(
@@ -1160,6 +1171,17 @@ async def analyze_financial_data_with_crewai(
     db: Session = Depends(get_db)
 ):
     """Executa análise financeira completa usando CrewAI"""
+
+    categorization_method = request.categorization_method
+
+    if "/" in categorization_method:
+        method, selected_model = categorization_method.split("/", 1)
+    else:
+        method = categorization_method
+        selected_model = "gemma3"  # padrão
+
+    print(f"🔍 DEBUG - Método: {method}, Modelo: {selected_model}")
+
     try:
         # Buscar perfil financeiro do usuário
         profile = db.query(FinancialProfile).filter(
@@ -1208,13 +1230,15 @@ async def analyze_financial_data_with_crewai(
                 detail="Objetivo financeiro não encontrado. Complete seu perfil financeiro primeiro."
             )
         
-        # Estrutura exata conforme frontend
+        # Estrutura exata conforme frontend - adicionar mensalidade
         user_data = {
             "user_id": current_user_id,
             "age": questionnaire_data.get("age"),
             "monthly_income": questionnaire_data.get("monthly_income"),
             "risk_profile": questionnaire_data.get("risk_profile"),
             "transportation_methods": questionnaire_data.get("transportation_methods"),
+            "mensalidade_faculdade": questionnaire_data.get("mensalidade_faculdade"),
+            "valor_mensalidade": questionnaire_data.get("valor_mensalidade", 0),
             "dependents": questionnaire_data.get("dependents"),
             "financial_goal": objetivo_data.get("financial_goal"),
             "target_amount": objetivo_data.get("financial_goal_details", {}).get("target_amount"),
@@ -1267,27 +1291,17 @@ async def analyze_financial_data_with_crewai(
             )
 
         # Criar e executar crew
-        crew_system = FinancialAdvisorCrew(user_data)
+        crew_system = FinancialAdvisorCrew(user_data, selected_model)
         
         print(f"🚀 Iniciando análise CrewAI para usuário {current_user_id}")
         print(f"🔍 DEBUG - User data final enviado para crew: {user_data}")
         
         results = await crew_system.run_analysis(
             csv_file_path=csv_file_path,
-            categorization_method=request.categorization_method
+            selected_model=selected_model
         )
 
         if results["success"]:
-            # Atualizar perfil com dados da análise
-            # if not hasattr(profile, 'analise_resultado'):
-            #     # Se não existe a coluna, adicionar aos dados do extrato
-            #     extrato_data["analysis_results"] = analysis_data
-            #     profile.extrato = json.dumps(extrato_data, ensure_ascii=False)
-            # else:
-            #     # Se existe a coluna específica, usar ela
-            #     profile.analise_resultado = json.dumps(analysis_data, ensure_ascii=False)
-            
-            # ✅ NOVO: Salvar respostas LLM na tabela llm_responses
             try:
                 save_llm_response_to_db(profile.id, results, db)
                 print(f"✅ Respostas LLM salvas na tabela llm_responses para perfil {profile.id}")

@@ -14,6 +14,8 @@ const FinancialDashboard = ({ onBackToHome }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Remover: const { runCompleteAnalysis, loading: analysisLoading } = useFinancialAnalysis();
 
   // Carregar dados do dashboard
   const loadDashboardData = async () => {
@@ -118,20 +120,22 @@ const FinancialDashboard = ({ onBackToHome }) => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Financeiro</h1>
         </div>
-        <Button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          variant="outline"
-        >
-          {refreshing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Atualizando...
-            </>
-          ) : (
-            'Atualizar Dados'
-          )}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            variant="outline"
+          >
+            {refreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Atualizando...
+              </>
+            ) : (
+              'Atualizar Dados'
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Alertas importantes */}
